@@ -222,7 +222,7 @@ class ModernDarkZohoAutomationApp:
         notebook_header = ttk.Frame(template_card, style="Card.TFrame")
         notebook_header.pack(fill=tk.X, pady=(0, 4))
         ttk.Label(notebook_header, text="📝 Drop/Paste up to 5 HTML Templates below. For each recipient, a template is picked at random:", style="Dark.TLabel").pack(side=tk.LEFT)
-        ttk.Label(notebook_header, text="Fonts: Times New Roman | Bold: {name} & {title}", bg="#0b253a", fg="#64dfdf", font=("Segoe UI", 8, "bold"), padx=6, pady=2).pack(side=tk.RIGHT)
+        tk.Label(notebook_header, text="Fonts: Times New Roman | Bold: {name} & {title}", bg="#0b253a", fg="#64dfdf", font=("Segoe UI", 8, "bold"), padx=6, pady=2).pack(side=tk.RIGHT)
 
         self.template_notebook = ttk.Notebook(template_card, style="Dark.TNotebook")
         self.template_notebook.pack(fill=tk.BOTH, expand=True, pady=(0, 4))
