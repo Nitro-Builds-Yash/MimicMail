@@ -130,9 +130,9 @@ class ModernDarkZohoAutomationApp:
                        foreground=[("disabled", "#a59d91")])
 
         self.style.configure("ActionBlue.TButton", font=("Segoe UI", 9, "bold"), padding=(14, 6),
-                             background="#cf142b", foreground="#ffffff", bordercolor="#ad0d21", lightcolor="#cf142b", darkcolor="#ad0d21")
+                             background="#1a62c6", foreground="#ffffff", bordercolor="#124996", lightcolor="#1a62c6", darkcolor="#124996")
         self.style.map("ActionBlue.TButton",
-                       background=[("active", "#ad0d21"), ("disabled", "#f4b8bf")],
+                       background=[("active", "#1550a2"), ("disabled", "#98b9e8")],
                        foreground=[("disabled", "#ffffff")])
 
         self.style.configure("ActionGreen.TButton", font=("Segoe UI", 13, "bold"), padding=(24, 12),
@@ -229,11 +229,11 @@ class ModernDarkZohoAutomationApp:
         reg_row = ttk.Frame(setup_card, style="Card.TFrame")
         reg_row.pack(fill=tk.X)
 
-        self.browse_btn = ttk.Button(reg_row, text="📁 Browse Excel (.xlsx)", command=self.browse_excel, style="StandardDark.TButton")
-        self.browse_btn.pack(side=tk.LEFT)
+        self.file_label = ttk.Label(reg_row, text="📄 No registry loaded (Required columns: name, email, title)", style="DarkMuted.TLabel")
+        self.file_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
 
-        self.file_label = ttk.Label(reg_row, text="No workbook selected (Columns: name, email, title)", style="DarkMuted.TLabel")
-        self.file_label.pack(side=tk.LEFT, padx=10, fill=tk.X, expand=True)
+        self.browse_btn = ttk.Button(reg_row, text="📁 Browse Excel (.xlsx)", command=self.browse_excel, style="ActionBlue.TButton")
+        self.browse_btn.pack(side=tk.RIGHT)
 
         # Card 2: 5 HTML Template Slots
         tmpl_card = ttk.LabelFrame(left_col, text="  2. Custom HTML Templates (5 Slots - Random Selection)  ", style="DarkCard.TLabelframe", padding="12")
