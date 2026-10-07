@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zoho-mail-merge"
+version = "0.1.0"
+description = "A visible, user-controlled Zoho Mail merge review helper."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["openpyxl>=3.1,<4", "tkinterdnd2>=0.4,<1"]
+
+[project.scripts]
+zoho-mail-merge = "zoho_mail_automation.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100

@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+*.log
+zoho_browser_profile/
+*.xlsx
+*.xls
+*.csv
+!data/input/.gitkeep
+!data/processed/.gitkeep
