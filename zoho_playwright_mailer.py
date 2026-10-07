@@ -12,21 +12,82 @@ import pandas as pd
 from playwright.sync_api import sync_playwright
 
 DEFAULT_SUBJECT = "{title}"
-DEFAULT_BODY = """Dear {name},
+
+TEMPLATES = {
+    "1. Clinical Editorial & Publication Collaboration": """Dear {name},
 
 I hope this message finds you well.
 
 I am reaching out regarding your esteemed work and leadership as {title}.
 
-We connect leading healthcare professionals, researchers, and innovators to advance intelligence, collaboration, and high-impact publications.
+We connect leading healthcare professionals, researchers, and clinical innovators to advance medical intelligence, global scientific conferences, and high-impact publications.
 
 We would be delighted to explore potential collaboration opportunities with you and share relevant updates aligned with your expertise.
 
 Looking forward to hearing from you.
 
 Best regards,
-MimicMail Team
-outreach@mimicmail.com"""
+MimicMail Editorial Board
+editorial@mimicmail.com""",
+
+    "2. Keynote Speaker & Congress Invitation": """Dear {name},
+
+Greetings.
+
+In light of your remarkable contributions and active role as {title}, our executive committee cordially invites you to participate as an honored speaker in our upcoming Global Medical Summit.
+
+Your clinical perspectives would offer immense value to our attending clinicians, healthcare directors, and academic faculties.
+
+Please let us know if you would be open to reviewing the congress program overview.
+
+Sincerely,
+Scientific Program Committee
+conferences@mimicmail.com""",
+
+    "3. Executive Peer Review & Advisory Board": """Dear {name},
+
+I trust this email finds you having a productive week.
+
+Given your distinguished track record as {title}, we are honored to invite you to join our Specialized Advisory & Peer Review Council.
+
+As an advisory member, you will have early access to groundbreaking clinical investigations and help steer international medical guidelines.
+
+We look forward to your favorable response.
+
+Warm regards,
+MimicMail Medical Directorate
+advisory@mimicmail.com""",
+
+    "4. Medical Research & Clinical Trial Outreach": """Dear {name},
+
+I hope you are doing well.
+
+We are reaching out to leaders in your therapeutic domain regarding your expertise as {title}.
+
+We are currently coordinating with multi-center investigators on specialized clinical studies and translational research initiatives that align with your department's focus.
+
+Would you be open to a brief introductory call or review of the study abstract?
+
+Best regards,
+Clinical Research Division
+trials@mimicmail.com""",
+
+    "5. Direct Brief Partnership Proposal": """Dear {name},
+
+I hope you are having a wonderful day.
+
+I wanted to connect directly with you regarding your ongoing initiatives as {title}.
+
+Our network collaborates with medical leaders across major institutions to accelerate knowledge exchange and scientific publications.
+
+We would appreciate the opportunity to discuss how our platforms can support your team's objectives this year.
+
+Thank you for your time,
+Outreach Operations Team
+partners@mimicmail.com"""
+}
+
+DEFAULT_BODY = TEMPLATES["1. Clinical Editorial & Publication Collaboration"]
 
 PROFILE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zoho_browser_profile")
 
@@ -182,6 +243,22 @@ class ModernDarkZohoAutomationApp:
         template_card = ttk.LabelFrame(container, text="  ✉️ 3. Personalized Medical Editorial Template  ", style="DarkCard.TLabelframe", padding="12")
         template_card.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
 
+        # Dropdown for the 5 Templates
+        preset_frame = ttk.Frame(template_card, style="Card.TFrame")
+        preset_frame.pack(fill=tk.X, pady=(0, 6))
+        ttk.Label(preset_frame, text="📑 Choose Preset Template (1-5):", style="Dark.TLabel").pack(side=tk.LEFT)
+
+        self.template_combo = ttk.Combobox(
+            preset_frame,
+            values=list(TEMPLATES.keys()),
+            state="readonly",
+            width=48,
+            font=("Segoe UI", 9)
+        )
+        self.template_combo.current(0)
+        self.template_combo.pack(side=tk.LEFT, padx=8)
+        self.template_combo.bind("<<ComboboxSelected>>", self._on_template_selected)
+
         subj_header_frame = ttk.Frame(template_card, style="Card.TFrame")
         subj_header_frame.pack(fill=tk.X, pady=(0, 2))
         ttk.Label(subj_header_frame, text="📌 Subject Line:", style="Dark.TLabel").pack(side=tk.LEFT)
@@ -195,8 +272,8 @@ class ModernDarkZohoAutomationApp:
 
         body_header_frame = ttk.Frame(template_card, style="Card.TFrame")
         body_header_frame.pack(fill=tk.X, pady=(0, 2))
-        ttk.Label(body_header_frame, text="📝 Medical Outreach Body (Times New Roman):", style="Dark.TLabel").pack(side=tk.LEFT)
-        ttk.Label(body_header_frame, text="(Placeholders: {name}, {title})", style="DarkMuted.TLabel").pack(side=tk.LEFT, padx=6)
+        ttk.Label(body_header_frame, text="📝 Medical Outreach Body (Times New Roman, Bold {name} & {title}):", style="Dark.TLabel").pack(side=tk.LEFT)
+        ttk.Label(body_header_frame, text="HTML Enabled", style="DarkMuted.TLabel").pack(side=tk.LEFT, padx=6)
 
         self.body_text = tk.Text(template_card, height=5, wrap=tk.WORD, bg="#0d1117", fg="#f0f6fc",
                                  insertbackground="#f0f6fc", highlightbackground=self.border_card,
@@ -251,6 +328,13 @@ class ModernDarkZohoAutomationApp:
                                 insertbackground="#f0f6fc", relief="flat", font=("Consolas", 8),
                                 highlightbackground=self.border_card, highlightthickness=1)
         self.log_text.pack(fill=tk.BOTH, expand=True)
+
+    def _on_template_selected(self, event=None):
+        selected_key = self.template_combo.get()
+        if selected_key in TEMPLATES:
+            self.body_text.delete("1.0", tk.END)
+            self.body_text.insert(tk.END, TEMPLATES[selected_key])
+            self.log(f"Loaded template preset: '{selected_key}'")
 
     def _slider_changed(self, val):
         self.slider_val_lbl.config(text=f"{float(val):.1f} mins")
@@ -522,18 +606,23 @@ class ModernDarkZohoAutomationApp:
 
             # Robust placeholder substitution (supports {name}, {title}, {email} in any case/whitespace)
             personalized_subject = subj_tmpl
-            personalized_body = body_tmpl
-
-            for ph, val in [("{name}", r_name), ("{title}", r_title), ("{email}", r_email),
-                            ("{NAME}", r_name), ("{TITLE}", r_title), ("{EMAIL}", r_email)]:
+            for ph, val in [("{title}", r_title), ("{name}", r_name), ("{TITLE}", r_title), ("{NAME}", r_name)]:
                 personalized_subject = personalized_subject.replace(ph, val)
+
+            # Bold name and title in the rendered email body as requested
+            r_name_bold = f"<b>{r_name}</b>"
+            r_title_bold = f"<b>{r_title}</b>"
+
+            personalized_body = body_tmpl
+            for ph, val in [("{name}", r_name_bold), ("{title}", r_title_bold), ("{email}", r_email),
+                            ("{NAME}", r_name_bold), ("{TITLE}", r_title_bold), ("{EMAIL}", r_email)]:
                 personalized_body = personalized_body.replace(ph, val)
 
             # Strip any leading spaces or lines so 'Dear {name}' always starts at character 0
             personalized_body = personalized_body.strip()
 
             self.log(f"Prepared subject: '{personalized_subject}'")
-            self.log(f"Dispatching ({q_idx + 1}/{total_in_batch}) to {r_name} <{r_email}>...")
+            self.log(f"Dispatching ({q_idx + 1}/{total_in_batch}) to {r_name} <{r_email}> (Bold Name & Title)...")
 
             try:
                 self._send_in_browser(page, r_email, personalized_subject, personalized_body)
@@ -700,9 +789,14 @@ class ModernDarkZohoAutomationApp:
         self.log(f"Inserting body text ({len(body)} characters) in Times New Roman...")
         filled_body = False
 
-        # Convert plaintext body to styled HTML paragraphs in Times New Roman
-        html_paragraphs = "".join([f"<p style=\"margin: 0 0 10px 0; font-family: 'Times New Roman', Times, serif; font-size: 12pt;\">{p.strip()}</p>" if p.strip() else "<p><br></p>" for p in body.split("\n\n")])
-        styled_html = f"<div style=\"font-family: 'Times New Roman', Times, serif; font-size: 12pt; color: #000000;\">{html_paragraphs}</div>"
+        # Convert body (supports raw HTML drops or text) to styled HTML paragraphs in Times New Roman
+        if "<p" in body.lower() or "<div" in body.lower() or "<br" in body.lower():
+            # Already HTML formatted, wrap in Times New Roman font container
+            styled_html = f"<div style=\"font-family: 'Times New Roman', Times, serif; font-size: 12pt; color: #000000; line-height: 1.5;\">{body}</div>"
+        else:
+            # Plain text converted to styled paragraphs
+            html_paragraphs = "".join([f"<p style=\"margin: 0 0 10px 0; font-family: 'Times New Roman', Times, serif; font-size: 12pt;\">{p.strip()}</p>" if p.strip() else "<p><br></p>" for p in body.split("\n\n")])
+            styled_html = f"<div style=\"font-family: 'Times New Roman', Times, serif; font-size: 12pt; color: #000000; line-height: 1.5;\">{html_paragraphs}</div>"
 
         # First check inside frames/iframes (TinyMCE editor in Zoho)
         for frame in page.frames:
