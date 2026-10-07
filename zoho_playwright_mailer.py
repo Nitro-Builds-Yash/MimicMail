@@ -44,14 +44,18 @@ class ModernDarkZohoAutomationApp:
 
         # Thread-safe work queue and background worker
         self.cmd_queue = queue.Queue()
-        self.worker_thread = threading.Thread(target=self._dedicated_browser_thread, daemon=True)
-        self.worker_thread.start()
+        self.worker_thread = None
 
         os.makedirs(PROFILE_DIR, exist_ok=True)
         self._apply_dark_theme()
         self._build_ui()
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _ensure_worker_started(self):
+        if not self.worker_thread or not self.worker_thread.is_alive():
+            self.worker_thread = threading.Thread(target=self._dedicated_browser_thread, daemon=True)
+            self.worker_thread.start()
 
     def _apply_dark_theme(self):
         self.bg_root = "#0d1117"        # Dark canvas
@@ -261,6 +265,7 @@ class ModernDarkZohoAutomationApp:
         self.root.after(0, _append)
 
     def request_open_browser(self):
+        self._ensure_worker_started()
         self.cmd_queue.put(("OPEN_BROWSER", None))
 
     def browse_excel(self):
@@ -320,6 +325,7 @@ class ModernDarkZohoAutomationApp:
             "use_jitter": self.jitter_var.get(),
             "excel_path": self.excel_file_path
         }
+        self._ensure_worker_started()
         self.cmd_queue.put(("START_AUTOMATION", params))
 
     def stop_automation(self):
