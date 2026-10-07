@@ -122,33 +122,33 @@ class ModernDarkZohoAutomationApp:
         self.style.configure("Dark.TLabel", background=self.bg_card, foreground=self.fg_primary, font=("Segoe UI", 9))
         self.style.configure("DarkMuted.TLabel", background=self.bg_card, foreground=self.fg_muted, font=("Segoe UI", 9))
 
-        # Buttons
+        # Buttons - All unified royal blue palette as requested
         self.style.configure("StandardDark.TButton", font=("Segoe UI", 9, "bold"), padding=(12, 6),
-                             background="#f4eee1", foreground="#2b261f", bordercolor="#d5ccbe", lightcolor="#f4eee1", darkcolor="#e2d8c7")
+                             background="#1a62c6", foreground="#ffffff", bordercolor="#124996", lightcolor="#2a75dc", darkcolor="#124996")
         self.style.map("StandardDark.TButton",
-                       background=[("active", "#e6ded1"), ("disabled", "#fbf8f4")],
-                       foreground=[("disabled", "#a59d91")])
+                       background=[("active", "#1550a2"), ("disabled", "#98b9e8")],
+                       foreground=[("disabled", "#ffffff")])
 
         self.style.configure("ActionBlue.TButton", font=("Segoe UI", 9, "bold"), padding=(14, 6),
-                             background="#1a62c6", foreground="#ffffff", bordercolor="#124996", lightcolor="#1a62c6", darkcolor="#124996")
+                             background="#1a62c6", foreground="#ffffff", bordercolor="#124996", lightcolor="#2a75dc", darkcolor="#124996")
         self.style.map("ActionBlue.TButton",
                        background=[("active", "#1550a2"), ("disabled", "#98b9e8")],
                        foreground=[("disabled", "#ffffff")])
 
         self.style.configure("ActionGreen.TButton", font=("Segoe UI", 13, "bold"), padding=(24, 12),
-                             background="#cf142b", foreground="#ffffff", bordercolor="#8c0a1a", lightcolor="#cf142b", darkcolor="#8c0a1a")
+                             background="#1a62c6", foreground="#ffffff", bordercolor="#124996", lightcolor="#2a75dc", darkcolor="#124996")
         self.style.map("ActionGreen.TButton",
-                       background=[("active", "#ad0d21"), ("disabled", "#f2a8b1")],
+                       background=[("active", "#1550a2"), ("disabled", "#98b9e8")],
                        foreground=[("disabled", "#ffffff")])
 
         self.style.configure("DangerRed.TButton", font=("Segoe UI", 10, "bold"), padding=(16, 12),
-                             background="#ffffff", foreground="#cf142b", bordercolor="#cf142b", lightcolor="#ffffff", darkcolor="#fcedef")
+                             background="#2a3b5c", foreground="#ffffff", bordercolor="#124996", lightcolor="#3b4f76", darkcolor="#124996")
         self.style.map("DangerRed.TButton",
-                       background=[("active", "#fdf2f3"), ("disabled", "#fbf8f4")],
-                       foreground=[("disabled", "#d89da4")])
+                       background=[("active", "#1c2840"), ("disabled", "#a0aec0")],
+                       foreground=[("disabled", "#ffffff")])
 
         # Progressbar
-        self.style.configure("Green.Horizontal.TProgressbar", troughcolor="#f4eee1", background="#cf142b", bordercolor="#d5ccbe", lightcolor="#e03146", darkcolor="#cf142b")
+        self.style.configure("Green.Horizontal.TProgressbar", troughcolor="#f4eee1", background="#1a62c6", bordercolor="#d5ccbe", lightcolor="#2a75dc", darkcolor="#1a62c6")
 
         # Sliders
         self.style.configure("Dark.Horizontal.TScale", background=self.bg_card, troughcolor="#f4eee1", bordercolor=self.border_card)
@@ -211,29 +211,29 @@ class ModernDarkZohoAutomationApp:
         left_col = ttk.Frame(main_columns, style="Root.TFrame")
         left_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
 
-        # Card 1: Webmail Session & Spreadsheet Ingestion (Combined compact row)
+        # Card 1: Webmail Session & Spreadsheet Ingestion (Top action buttons parallel, info below)
         setup_card = ttk.LabelFrame(left_col, text="  1. Session & Recipient Registry  ", style="DarkCard.TLabelframe", padding="12")
         setup_card.pack(fill=tk.X, pady=(0, 10))
 
-        # Zoho Session Row
-        s_row = ttk.Frame(setup_card, style="Card.TFrame")
-        s_row.pack(fill=tk.X, pady=(0, 8))
+        # Top Button Row: Launch Zoho on left corner, Browse Excel on right corner
+        btn_row = ttk.Frame(setup_card, style="Card.TFrame")
+        btn_row.pack(fill=tk.X, pady=(0, 6))
 
-        self.login_btn = ttk.Button(s_row, text="🌐 Launch Zoho Webmail", command=self.request_open_browser, style="ActionBlue.TButton")
+        self.login_btn = ttk.Button(btn_row, text="🌐 Launch Zoho Webmail", command=self.request_open_browser, style="ActionBlue.TButton")
         self.login_btn.pack(side=tk.LEFT)
 
-        self.session_indicator = tk.Label(s_row, text="● Browser: Ready for connection", bg="#ffffff", fg=self.fg_muted, font=("Segoe UI", 9, "bold"), padx=10)
+        self.browse_btn = ttk.Button(btn_row, text="📁 Browse Excel (.xlsx)", command=self.browse_excel, style="ActionBlue.TButton")
+        self.browse_btn.pack(side=tk.RIGHT)
+
+        # Bottom Info Row: Session indicator on left, loaded file status on right
+        info_row = ttk.Frame(setup_card, style="Card.TFrame")
+        info_row.pack(fill=tk.X)
+
+        self.session_indicator = tk.Label(info_row, text="● Browser: Ready for connection", bg="#ffffff", fg=self.fg_muted, font=("Segoe UI", 9, "bold"))
         self.session_indicator.pack(side=tk.LEFT)
 
-        # Registry File Row
-        reg_row = ttk.Frame(setup_card, style="Card.TFrame")
-        reg_row.pack(fill=tk.X)
-
-        self.file_label = ttk.Label(reg_row, text="📄 No registry loaded (Required columns: name, email, title)", style="DarkMuted.TLabel")
-        self.file_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
-
-        self.browse_btn = ttk.Button(reg_row, text="📁 Browse Excel (.xlsx)", command=self.browse_excel, style="ActionBlue.TButton")
-        self.browse_btn.pack(side=tk.RIGHT)
+        self.file_label = ttk.Label(info_row, text="📄 No registry loaded (Required: name, email, title)", style="DarkMuted.TLabel")
+        self.file_label.pack(side=tk.RIGHT)
 
         # Card 2: 5 HTML Template Slots
         tmpl_card = ttk.LabelFrame(left_col, text="  2. Custom HTML Templates (5 Slots - Random Selection)  ", style="DarkCard.TLabelframe", padding="12")
