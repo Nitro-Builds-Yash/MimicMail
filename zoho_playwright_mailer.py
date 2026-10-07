@@ -13,81 +13,38 @@ from playwright.sync_api import sync_playwright
 
 DEFAULT_SUBJECT = "{title}"
 
-TEMPLATES = {
-    "1. Clinical Editorial & Publication Collaboration": """Dear {name},
+# Default user-customizable HTML templates for the 5 slots
+SAMPLE_HTML_TEMPLATES = [
+    """<p>Dear {name},</p>
+<p>I hope this email finds you well.</p>
+<p>I am reaching out regarding your esteemed work as {title}. We are connecting clinical leaders and researchers to collaborate on high-impact medical publications and global initiatives.</p>
+<p>We would welcome the opportunity to discuss potential synergies with you.</p>
+<p>Best regards,<br>MimicMail Editorial Board<br>editorial@mimicmail.com</p>""",
 
-I hope this message finds you well.
+    """<p>Dear {name},</p>
+<p>Greetings.</p>
+<p>Given your notable leadership as {title}, our executive committee cordially invites you to participate as an honored speaker in our upcoming Global Medical Summit.</p>
+<p>Your expertise would provide invaluable perspective to our attending clinicians and researchers.</p>
+<p>Sincerely,<br>Scientific Program Committee<br>conferences@mimicmail.com</p>""",
 
-I am reaching out regarding your esteemed work and leadership as {title}.
+    """<p>Dear {name},</p>
+<p>I trust you are having a productive week.</p>
+<p>In light of your distinguished track record as {title}, we are pleased to invite you to join our Specialized Advisory &amp; Peer Review Council.</p>
+<p>We would appreciate the opportunity to share our upcoming clinical review guidelines with you.</p>
+<p>Warm regards,<br>MimicMail Directorate<br>advisory@mimicmail.com</p>""",
 
-We connect leading healthcare professionals, researchers, and clinical innovators to advance medical intelligence, global scientific conferences, and high-impact publications.
+    """<p>Dear {name},</p>
+<p>I hope you are doing well.</p>
+<p>We are reaching out to prominent professionals regarding your initiatives as {title}. We are coordinating multi-center clinical trials and translational research collaborations in your therapeutic domain.</p>
+<p>Would you be open to reviewing a brief project abstract?</p>
+<p>Best regards,<br>Clinical Research Division<br>trials@mimicmail.com</p>""",
 
-We would be delighted to explore potential collaboration opportunities with you and share relevant updates aligned with your expertise.
-
-Looking forward to hearing from you.
-
-Best regards,
-MimicMail Editorial Board
-editorial@mimicmail.com""",
-
-    "2. Keynote Speaker & Congress Invitation": """Dear {name},
-
-Greetings.
-
-In light of your remarkable contributions and active role as {title}, our executive committee cordially invites you to participate as an honored speaker in our upcoming Global Medical Summit.
-
-Your clinical perspectives would offer immense value to our attending clinicians, healthcare directors, and academic faculties.
-
-Please let us know if you would be open to reviewing the congress program overview.
-
-Sincerely,
-Scientific Program Committee
-conferences@mimicmail.com""",
-
-    "3. Executive Peer Review & Advisory Board": """Dear {name},
-
-I trust this email finds you having a productive week.
-
-Given your distinguished track record as {title}, we are honored to invite you to join our Specialized Advisory & Peer Review Council.
-
-As an advisory member, you will have early access to groundbreaking clinical investigations and help steer international medical guidelines.
-
-We look forward to your favorable response.
-
-Warm regards,
-MimicMail Medical Directorate
-advisory@mimicmail.com""",
-
-    "4. Medical Research & Clinical Trial Outreach": """Dear {name},
-
-I hope you are doing well.
-
-We are reaching out to leaders in your therapeutic domain regarding your expertise as {title}.
-
-We are currently coordinating with multi-center investigators on specialized clinical studies and translational research initiatives that align with your department's focus.
-
-Would you be open to a brief introductory call or review of the study abstract?
-
-Best regards,
-Clinical Research Division
-trials@mimicmail.com""",
-
-    "5. Direct Brief Partnership Proposal": """Dear {name},
-
-I hope you are having a wonderful day.
-
-I wanted to connect directly with you regarding your ongoing initiatives as {title}.
-
-Our network collaborates with medical leaders across major institutions to accelerate knowledge exchange and scientific publications.
-
-We would appreciate the opportunity to discuss how our platforms can support your team's objectives this year.
-
-Thank you for your time,
-Outreach Operations Team
-partners@mimicmail.com"""
-}
-
-DEFAULT_BODY = TEMPLATES["1. Clinical Editorial & Publication Collaboration"]
+    """<p>Dear {name},</p>
+<p>I hope this message finds you having a wonderful day.</p>
+<p>I wanted to connect directly with you regarding your ongoing clinical focus as {title}. Our organization partners with leading medical teams to accelerate knowledge exchange.</p>
+<p>Thank you for your valuable time and consideration.</p>
+<p>Best regards,<br>Outreach Operations Team<br>partners@mimicmail.com</p>"""
+]
 
 PROFILE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zoho_browser_profile")
 
@@ -142,6 +99,13 @@ class ModernDarkZohoAutomationApp:
             pass
 
         self.style.configure(".", background=self.bg_root, foreground=self.fg_primary)
+
+        # Notebook & Tabs
+        self.style.configure("Dark.TNotebook", background=self.bg_card, borderwidth=0)
+        self.style.configure("Dark.TNotebook.Tab", background="#21262d", foreground="#8b949e", font=("Segoe UI", 9, "bold"), padding=[10, 4])
+        self.style.map("Dark.TNotebook.Tab",
+                       background=[("selected", "#30363d"), ("active", "#282e33")],
+                       foreground=[("selected", "#58a6ff"), ("active", "#c9d1d9")])
 
         # LabelFrames
         self.style.configure("DarkCard.TLabelframe", background=self.bg_card, bordercolor=self.border_card, relief="solid", borderwidth=1)
@@ -239,30 +203,14 @@ class ModernDarkZohoAutomationApp:
         self.browse_btn = ttk.Button(file_card, text="📁 Browse Registry (.xlsx)", command=self.browse_excel, style="StandardDark.TButton")
         self.browse_btn.pack(side=tk.RIGHT)
 
-        # --- Card 3: Dynamic Template Customizer ---
-        template_card = ttk.LabelFrame(container, text="  ✉️ 3. Personalized Medical Editorial Template  ", style="DarkCard.TLabelframe", padding="12")
+        # --- Card 3: Dynamic HTML Templates (5 Slots) ---
+        template_card = ttk.LabelFrame(container, text="  ✉️ 3. Drop / Paste Custom HTML Templates (5 Slots - Random Selection)  ", style="DarkCard.TLabelframe", padding="12")
         template_card.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-
-        # Dropdown for the 5 Templates
-        preset_frame = ttk.Frame(template_card, style="Card.TFrame")
-        preset_frame.pack(fill=tk.X, pady=(0, 6))
-        ttk.Label(preset_frame, text="📑 Choose Preset Template (1-5):", style="Dark.TLabel").pack(side=tk.LEFT)
-
-        self.template_combo = ttk.Combobox(
-            preset_frame,
-            values=list(TEMPLATES.keys()),
-            state="readonly",
-            width=48,
-            font=("Segoe UI", 9)
-        )
-        self.template_combo.current(0)
-        self.template_combo.pack(side=tk.LEFT, padx=8)
-        self.template_combo.bind("<<ComboboxSelected>>", self._on_template_selected)
 
         subj_header_frame = ttk.Frame(template_card, style="Card.TFrame")
         subj_header_frame.pack(fill=tk.X, pady=(0, 2))
-        ttk.Label(subj_header_frame, text="📌 Subject Line:", style="Dark.TLabel").pack(side=tk.LEFT)
-        ttk.Label(subj_header_frame, text="(Automatically uses each row's 'title', e.g. {title})", style="DarkMuted.TLabel").pack(side=tk.LEFT, padx=6)
+        ttk.Label(subj_header_frame, text="📌 Subject Line Template:", style="Dark.TLabel").pack(side=tk.LEFT)
+        ttk.Label(subj_header_frame, text="(Defaults to {title} from each row)", style="DarkMuted.TLabel").pack(side=tk.LEFT, padx=6)
 
         self.subj_entry = tk.Entry(template_card, bg="#0d1117", fg="#f0f6fc", insertbackground="#f0f6fc",
                                    highlightbackground=self.border_card, highlightcolor="#58a6ff", highlightthickness=1,
@@ -270,16 +218,41 @@ class ModernDarkZohoAutomationApp:
         self.subj_entry.insert(0, DEFAULT_SUBJECT)
         self.subj_entry.pack(fill=tk.X, pady=(0, 8), ipady=4)
 
-        body_header_frame = ttk.Frame(template_card, style="Card.TFrame")
-        body_header_frame.pack(fill=tk.X, pady=(0, 2))
-        ttk.Label(body_header_frame, text="📝 Medical Outreach Body (Times New Roman, Bold {name} & {title}):", style="Dark.TLabel").pack(side=tk.LEFT)
-        ttk.Label(body_header_frame, text="HTML Enabled", style="DarkMuted.TLabel").pack(side=tk.LEFT, padx=6)
+        # Tabbed Notebook for 5 HTML Templates
+        notebook_header = ttk.Frame(template_card, style="Card.TFrame")
+        notebook_header.pack(fill=tk.X, pady=(0, 4))
+        ttk.Label(notebook_header, text="📝 Drop/Paste up to 5 HTML Templates below. For each recipient, a template is picked at random:", style="Dark.TLabel").pack(side=tk.LEFT)
+        ttk.Label(notebook_header, text="Fonts: Times New Roman | Bold: {name} & {title}", bg="#0b253a", fg="#64dfdf", font=("Segoe UI", 8, "bold"), padx=6, pady=2).pack(side=tk.RIGHT)
 
-        self.body_text = tk.Text(template_card, height=5, wrap=tk.WORD, bg="#0d1117", fg="#f0f6fc",
-                                 insertbackground="#f0f6fc", highlightbackground=self.border_card,
-                                 highlightcolor="#58a6ff", highlightthickness=1, relief="flat", font=("Times New Roman", 11))
-        self.body_text.insert(tk.END, DEFAULT_BODY)
-        self.body_text.pack(fill=tk.BOTH, expand=True, pady=(0, 4))
+        self.template_notebook = ttk.Notebook(template_card, style="Dark.TNotebook")
+        self.template_notebook.pack(fill=tk.BOTH, expand=True, pady=(0, 4))
+
+        self.template_text_widgets = []
+        for i in range(5):
+            tab_frame = ttk.Frame(self.template_notebook, style="Card.TFrame")
+            self.template_notebook.add(tab_frame, text=f" 📄 Template {i+1} ")
+
+            toolbar = ttk.Frame(tab_frame, style="Card.TFrame")
+            toolbar.pack(fill=tk.X, pady=(4, 4))
+            ttk.Label(toolbar, text=f"Slot {i+1} (HTML format):", style="DarkMuted.TLabel").pack(side=tk.LEFT)
+
+            load_btn = ttk.Button(toolbar, text=f"📂 Load HTML File into Slot {i+1}",
+                                  command=lambda idx=i: self._load_template_file(idx),
+                                  style="StandardDark.TButton")
+            load_btn.pack(side=tk.RIGHT)
+
+            clear_btn = ttk.Button(toolbar, text="🗑 Clear",
+                                   command=lambda idx=i: self._clear_template_slot(idx),
+                                   style="StandardDark.TButton")
+            clear_btn.pack(side=tk.RIGHT, padx=4)
+
+            txt = tk.Text(tab_frame, height=5, wrap=tk.WORD, bg="#0d1117", fg="#f0f6fc",
+                          insertbackground="#f0f6fc", highlightbackground=self.border_card,
+                          highlightcolor="#58a6ff", highlightthickness=1, relief="flat", font=("Times New Roman", 11))
+            initial_content = SAMPLE_HTML_TEMPLATES[i] if i < len(SAMPLE_HTML_TEMPLATES) else ""
+            txt.insert(tk.END, initial_content)
+            txt.pack(fill=tk.BOTH, expand=True, pady=(0, 2))
+            self.template_text_widgets.append(txt)
 
         # --- Card 4: Human-Paced Delay & Safeguards ---
         pacing_card = ttk.LabelFrame(container, text="  ⏱ 4. Anti-Bot Pacing & Delivery Safeguards  ", style="DarkCard.TLabelframe", padding="12")
@@ -329,12 +302,25 @@ class ModernDarkZohoAutomationApp:
                                 highlightbackground=self.border_card, highlightthickness=1)
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
-    def _on_template_selected(self, event=None):
-        selected_key = self.template_combo.get()
-        if selected_key in TEMPLATES:
-            self.body_text.delete("1.0", tk.END)
-            self.body_text.insert(tk.END, TEMPLATES[selected_key])
-            self.log(f"Loaded template preset: '{selected_key}'")
+    def _load_template_file(self, idx: int):
+        path = filedialog.askopenfilename(
+            title=f"Select HTML Template for Slot {idx+1}",
+            filetypes=[("HTML / Text Files", "*.html *.htm *.txt"), ("All Files", "*.*")]
+        )
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+            self.template_text_widgets[idx].delete("1.0", tk.END)
+            self.template_text_widgets[idx].insert(tk.END, content)
+            self.log(f"Successfully loaded file '{os.path.basename(path)}' into Template Slot {idx+1}.")
+        except Exception as e:
+            messagebox.showerror("File Error", f"Unable to read file:\n{str(e)}")
+
+    def _clear_template_slot(self, idx: int):
+        self.template_text_widgets[idx].delete("1.0", tk.END)
+        self.log(f"Cleared Template Slot {idx+1}.")
 
     def _slider_changed(self, val):
         self.slider_val_lbl.config(text=f"{float(val):.1f} mins")
@@ -392,11 +378,22 @@ class ModernDarkZohoAutomationApp:
             return
 
         subj_tmpl = self.subj_entry.get().strip()
-        body_tmpl = self.body_text.get("1.0", tk.END).strip()
-
-        if not subj_tmpl or not body_tmpl:
-            messagebox.showwarning("Empty Templates", "Subject and Body templates cannot be empty.")
+        if not subj_tmpl:
+            messagebox.showwarning("Missing Subject", "Please enter a subject line template (e.g. {title}).")
             return
+
+        # Gather all non-empty user templates across the 5 slots
+        active_templates = []
+        for i, txt_widget in enumerate(self.template_text_widgets):
+            content = txt_widget.get("1.0", tk.END).strip()
+            if content:
+                active_templates.append(content)
+
+        if not active_templates:
+            messagebox.showwarning("No Templates", "Please provide at least 1 template in the 5 slots (paste HTML or load a file).")
+            return
+
+        self.log(f"Verified {len(active_templates)} active user template(s). Random picker enabled across them.")
 
         self.is_running = True
         self.stop_requested = False
@@ -404,7 +401,7 @@ class ModernDarkZohoAutomationApp:
 
         params = {
             "subj_tmpl": subj_tmpl,
-            "body_tmpl": body_tmpl,
+            "body_tmpls": active_templates,
             "base_mins": self.interval_var.get(),
             "use_jitter": self.jitter_var.get(),
             "excel_path": self.excel_file_path
@@ -548,7 +545,7 @@ class ModernDarkZohoAutomationApp:
     def _execute_batch(self, page, params):
         excel_path = params["excel_path"]
         subj_tmpl = params["subj_tmpl"]
-        body_tmpl = params["body_tmpl"]
+        body_tmpls = params.get("body_tmpls", [params.get("body_tmpl", "")])
         base_mins = params["base_mins"]
         use_jitter = params["use_jitter"]
 
@@ -583,7 +580,7 @@ class ModernDarkZohoAutomationApp:
         target_indices = pending_indices[:BATCH_CAP]
         total_in_batch = len(target_indices)
 
-        self.log(f"Dispatching batch of {total_in_batch} recipients...")
+        self.log(f"Dispatching batch of {total_in_batch} recipients across {len(body_tmpls)} random template pool...")
 
         sent_count = 0
         for q_idx, r_idx in enumerate(target_indices):
@@ -604,6 +601,9 @@ class ModernDarkZohoAutomationApp:
                 df.to_excel(excel_path, index=False)
                 continue
 
+            # Randomly select 1 template from the user-provided templates
+            chosen_body_tmpl = random.choice(body_tmpls)
+
             # Robust placeholder substitution (supports {name}, {title}, {email} in any case/whitespace)
             personalized_subject = subj_tmpl
             for ph, val in [("{title}", r_title), ("{name}", r_name), ("{TITLE}", r_title), ("{NAME}", r_name)]:
@@ -613,7 +613,7 @@ class ModernDarkZohoAutomationApp:
             r_name_bold = f"<b>{r_name}</b>"
             r_title_bold = f"<b>{r_title}</b>"
 
-            personalized_body = body_tmpl
+            personalized_body = chosen_body_tmpl
             for ph, val in [("{name}", r_name_bold), ("{title}", r_title_bold), ("{email}", r_email),
                             ("{NAME}", r_name_bold), ("{TITLE}", r_title_bold), ("{EMAIL}", r_email)]:
                 personalized_body = personalized_body.replace(ph, val)
