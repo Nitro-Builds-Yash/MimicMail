@@ -10,8 +10,10 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import pandas as pd
 from playwright.sync_api import sync_playwright
+from PIL import Image, ImageTk
 
 DEFAULT_SUBJECT = "{title}"
+LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pulsus_logo.png")
 
 # Default user-customizable HTML templates for the 5 slots
 SAMPLE_HTML_TEMPLATES = [
@@ -52,13 +54,15 @@ class ModernDarkZohoAutomationApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("MimicMail — Zoho Outreach Automation")
-        self.root.geometry("880x880")
-        self.root.minsize(780, 780)
+        self.root.geometry("920x920")
+        self.root.minsize(820, 800)
 
         # State flags
         self.is_running = False
         self.stop_requested = False
         self.excel_file_path = None
+        self.total_rows_count = 0
+        self.sent_rows_count = 0
 
         # Thread-safe work queue and background worker
         self.cmd_queue = queue.Queue()
@@ -132,17 +136,20 @@ class ModernDarkZohoAutomationApp:
                        background=[("active", self.accent_blue_hover), ("disabled", "#1b2d4b")],
                        foreground=[("disabled", "#52677e")])
 
-        self.style.configure("ActionGreen.TButton", font=("Segoe UI", 10, "bold"), padding=(16, 8),
-                             background=self.accent_green, foreground="#ffffff", bordercolor=self.border_card, lightcolor=self.accent_green, darkcolor=self.accent_green)
+        self.style.configure("ActionGreen.TButton", font=("Segoe UI", 12, "bold"), padding=(20, 10),
+                             background="#238636", foreground="#ffffff", bordercolor="#3fb950", lightcolor="#2ea043", darkcolor="#238636")
         self.style.map("ActionGreen.TButton",
-                       background=[("active", self.accent_green_hover), ("disabled", "#143a1f")],
+                       background=[("active", "#2ea043"), ("disabled", "#143a1f")],
                        foreground=[("disabled", "#4b7354")])
 
-        self.style.configure("DangerRed.TButton", font=("Segoe UI", 10, "bold"), padding=(16, 8),
+        self.style.configure("DangerRed.TButton", font=("Segoe UI", 10, "bold"), padding=(16, 10),
                              background=self.accent_red, foreground="#ffffff", bordercolor=self.border_card, lightcolor=self.accent_red, darkcolor=self.accent_red)
         self.style.map("DangerRed.TButton",
                        background=[("active", self.accent_red_hover), ("disabled", "#3a1717")],
                        foreground=[("disabled", "#664141")])
+
+        # Progressbar
+        self.style.configure("Green.Horizontal.TProgressbar", troughcolor="#161b22", background="#2ea043", bordercolor="#30363d", lightcolor="#3fb950", darkcolor="#2ea043")
 
         # Sliders
         self.style.configure("Dark.Horizontal.TScale", background=self.bg_card, troughcolor="#21262d", bordercolor=self.border_card)
@@ -152,29 +159,51 @@ class ModernDarkZohoAutomationApp:
         self.style.map("Dark.TCheckbutton", background=[("active", self.bg_card)])
 
     def _build_ui(self):
-        container = ttk.Frame(self.root, style="Root.TFrame", padding="16")
+        container = ttk.Frame(self.root, style="Root.TFrame", padding="14")
         container.pack(fill=tk.BOTH, expand=True)
 
-        # --- Top Header / Hero Banner ---
-        hero_frame = tk.Frame(container, bg=self.bg_card_alt, highlightbackground="#1b4965", highlightthickness=1, padx=18, pady=14)
-        hero_frame.pack(fill=tk.X, pady=(0, 12))
+        # --- Top Header / Hero Banner with PULSUS Logo ---
+        hero_frame = tk.Frame(container, bg="#10151f", highlightbackground="#303e54", highlightthickness=1, padx=16, pady=10)
+        hero_frame.pack(fill=tk.X, pady=(0, 10))
 
-        header_top_row = tk.Frame(hero_frame, bg=self.bg_card_alt)
+        header_top_row = tk.Frame(hero_frame, bg="#10151f")
         header_top_row.pack(fill=tk.X)
 
-        title_lbl = tk.Label(header_top_row, text="⚕️ MIMICMAIL 🩺", bg=self.bg_card_alt, fg="#5bc0be", font=("Segoe UI", 16, "bold"))
-        title_lbl.pack(side=tk.LEFT)
+        # Load & display Pulsus logo
+        self.logo_photo = None
+        if os.path.exists(LOGO_PATH):
+            try:
+                pil_img = Image.open(LOGO_PATH)
+                # Proportional resize to fit header neatly (approx height 38-42px)
+                w_orig, h_orig = pil_img.size
+                target_h = 40
+                target_w = int(w_orig * (target_h / float(h_orig)))
+                pil_resized = pil_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+                self.logo_photo = ImageTk.PhotoImage(pil_resized)
+                logo_lbl = tk.Label(header_top_row, image=self.logo_photo, bg="#10151f")
+                logo_lbl.pack(side=tk.LEFT, padx=(0, 14))
+            except Exception as e:
+                pass
 
-        badge_lbl = tk.Label(header_top_row, text="🔬 CLINICAL INTELLIGENCE EDITION", bg="#0b253a", fg="#64dfdf", font=("Segoe UI", 8, "bold"), padx=8, pady=3)
-        badge_lbl.pack(side=tk.RIGHT)
+        title_container = tk.Frame(header_top_row, bg="#10151f")
+        title_container.pack(side=tk.LEFT, fill=tk.Y)
 
-        sub_lbl = tk.Label(hero_frame, text="🏥 Medical Leadership & Healthcare Outreach Dispatcher | 🧬 Humanized Playwright Automation",
-                           bg=self.bg_card_alt, fg="#90e0ef", font=("Segoe UI", 9))
-        sub_lbl.pack(anchor=tk.W, pady=(4, 0))
+        title_lbl = tk.Label(title_container, text="MIMICMAIL", bg="#10151f", fg="#5bc0be", font=("Segoe UI", 15, "bold"))
+        title_lbl.pack(anchor=tk.W)
+
+        sub_lbl = tk.Label(title_container, text="Medical Leadership & Outreach Automation Platform | Powered by Pulsus Group",
+                           bg="#10151f", fg="#8da4c4", font=("Segoe UI", 8))
+        sub_lbl.pack(anchor=tk.W)
+
+        badge_box = tk.Frame(header_top_row, bg="#10151f")
+        badge_box.pack(side=tk.RIGHT)
+
+        badge_lbl = tk.Label(badge_box, text="🔬 CLINICAL INTELLIGENCE EDITION", bg="#0b253a", fg="#64dfdf", font=("Segoe UI", 8, "bold"), padx=8, pady=4, relief="ridge", bd=1)
+        badge_lbl.pack(anchor=tk.E)
 
         # --- Card 1: Browser Session ---
-        auth_card = ttk.LabelFrame(container, text="  🌐 1. Clinical Web Portal Session  ", style="DarkCard.TLabelframe", padding="12")
-        auth_card.pack(fill=tk.X, pady=(0, 10))
+        auth_card = ttk.LabelFrame(container, text="  🌐 1. Clinical Web Portal Session  ", style="DarkCard.TLabelframe", padding="10")
+        auth_card.pack(fill=tk.X, pady=(0, 8))
 
         auth_top_lbl = ttk.Label(
             auth_card,
@@ -182,7 +211,7 @@ class ModernDarkZohoAutomationApp:
                  "Leave the browser open after sign-in; the clinical queue dispatches directly inside your active tab.",
             style="DarkMuted.TLabel"
         )
-        auth_top_lbl.pack(anchor=tk.W, pady=(0, 8))
+        auth_top_lbl.pack(anchor=tk.W, pady=(0, 6))
 
         auth_action_row = ttk.Frame(auth_card, style="Card.TFrame")
         auth_action_row.pack(fill=tk.X)
@@ -194,8 +223,8 @@ class ModernDarkZohoAutomationApp:
         self.session_indicator.pack(side=tk.LEFT)
 
         # --- Card 2: Excel Spreadsheet Ingestion ---
-        file_card = ttk.LabelFrame(container, text="  📋 2. Recipient Medical Registry (.xlsx)  ", style="DarkCard.TLabelframe", padding="12")
-        file_card.pack(fill=tk.X, pady=(0, 10))
+        file_card = ttk.LabelFrame(container, text="  📋 2. Recipient Medical Registry (.xlsx)  ", style="DarkCard.TLabelframe", padding="10")
+        file_card.pack(fill=tk.X, pady=(0, 8))
 
         self.file_label = ttk.Label(file_card, text="📄 No registry loaded (Required columns: name, email, title)", style="DarkMuted.TLabel")
         self.file_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
@@ -204,8 +233,8 @@ class ModernDarkZohoAutomationApp:
         self.browse_btn.pack(side=tk.RIGHT)
 
         # --- Card 3: Dynamic HTML Templates (5 Slots) ---
-        template_card = ttk.LabelFrame(container, text="  ✉️ 3. Drop / Paste Custom HTML Templates (5 Slots - Random Selection)  ", style="DarkCard.TLabelframe", padding="12")
-        template_card.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        template_card = ttk.LabelFrame(container, text="  ✉️ 3. Drop / Paste Custom HTML Templates (5 Slots - Random Selection)  ", style="DarkCard.TLabelframe", padding="10")
+        template_card.pack(fill=tk.BOTH, expand=True, pady=(0, 8))
 
         subj_header_frame = ttk.Frame(template_card, style="Card.TFrame")
         subj_header_frame.pack(fill=tk.X, pady=(0, 2))
@@ -216,7 +245,7 @@ class ModernDarkZohoAutomationApp:
                                    highlightbackground=self.border_card, highlightcolor="#58a6ff", highlightthickness=1,
                                    relief="flat", font=("Segoe UI", 9))
         self.subj_entry.insert(0, DEFAULT_SUBJECT)
-        self.subj_entry.pack(fill=tk.X, pady=(0, 8), ipady=4)
+        self.subj_entry.pack(fill=tk.X, pady=(0, 6), ipady=3)
 
         # Tabbed Notebook for 5 HTML Templates
         notebook_header = ttk.Frame(template_card, style="Card.TFrame")
@@ -225,7 +254,7 @@ class ModernDarkZohoAutomationApp:
         tk.Label(notebook_header, text="Fonts: Times New Roman | Bold: {name} & {title}", bg="#0b253a", fg="#64dfdf", font=("Segoe UI", 8, "bold"), padx=6, pady=2).pack(side=tk.RIGHT)
 
         self.template_notebook = ttk.Notebook(template_card, style="Dark.TNotebook")
-        self.template_notebook.pack(fill=tk.BOTH, expand=True, pady=(0, 4))
+        self.template_notebook.pack(fill=tk.BOTH, expand=True, pady=(0, 2))
 
         self.template_text_widgets = []
         for i in range(5):
@@ -233,7 +262,7 @@ class ModernDarkZohoAutomationApp:
             self.template_notebook.add(tab_frame, text=f" 📄 Template {i+1} ")
 
             toolbar = ttk.Frame(tab_frame, style="Card.TFrame")
-            toolbar.pack(fill=tk.X, pady=(4, 4))
+            toolbar.pack(fill=tk.X, pady=(2, 2))
             ttk.Label(toolbar, text=f"Slot {i+1} (HTML format):", style="DarkMuted.TLabel").pack(side=tk.LEFT)
 
             load_btn = ttk.Button(toolbar, text=f"📂 Load HTML File into Slot {i+1}",
@@ -246,7 +275,7 @@ class ModernDarkZohoAutomationApp:
                                    style="StandardDark.TButton")
             clear_btn.pack(side=tk.RIGHT, padx=4)
 
-            txt = tk.Text(tab_frame, height=5, wrap=tk.WORD, bg="#0d1117", fg="#f0f6fc",
+            txt = tk.Text(tab_frame, height=4, wrap=tk.WORD, bg="#0d1117", fg="#f0f6fc",
                           insertbackground="#f0f6fc", highlightbackground=self.border_card,
                           highlightcolor="#58a6ff", highlightthickness=1, relief="flat", font=("Times New Roman", 11))
             initial_content = SAMPLE_HTML_TEMPLATES[i] if i < len(SAMPLE_HTML_TEMPLATES) else ""
@@ -254,12 +283,12 @@ class ModernDarkZohoAutomationApp:
             txt.pack(fill=tk.BOTH, expand=True, pady=(0, 2))
             self.template_text_widgets.append(txt)
 
-        # --- Card 4: Human-Paced Delay & Safeguards ---
-        pacing_card = ttk.LabelFrame(container, text="  ⏱ 4. Anti-Bot Pacing & Delivery Safeguards  ", style="DarkCard.TLabelframe", padding="12")
-        pacing_card.pack(fill=tk.X, pady=(0, 10))
+        # --- Card 4: Anti-Bot Pacing & Delivery Safeguards ---
+        pacing_card = ttk.LabelFrame(container, text="  ⏱ 4. Anti-Bot Pacing & Delivery Safeguards  ", style="DarkCard.TLabelframe", padding="10")
+        pacing_card.pack(fill=tk.X, pady=(0, 8))
 
         slider_row = ttk.Frame(pacing_card, style="Card.TFrame")
-        slider_row.pack(fill=tk.X, pady=(0, 4))
+        slider_row.pack(fill=tk.X, pady=(0, 2))
 
         ttk.Label(slider_row, text="⏳ Rest Interval:", style="Dark.TLabel").pack(side=tk.LEFT, padx=(0, 8))
         self.interval_var = tk.DoubleVar(value=2.0)
@@ -272,35 +301,107 @@ class ModernDarkZohoAutomationApp:
         self.jitter_var = tk.BooleanVar(value=True)
         self.jitter_check = ttk.Checkbutton(pacing_card, text="🩺 Human Behavioral Jitter (±15 to 35s randomized cadence)",
                                             variable=self.jitter_var, style="Dark.TCheckbutton")
-        self.jitter_check.pack(anchor=tk.W, pady=(2, 6))
+        self.jitter_check.pack(anchor=tk.W, pady=(2, 4))
 
         timer_row = ttk.Frame(pacing_card, style="Card.TFrame")
         timer_row.pack(fill=tk.X)
 
-        self.timer_display = tk.Label(timer_row, text="⏱ Status: Queue Ready", bg=self.bg_card, fg="#58a6ff", font=("Segoe UI", 10, "bold"))
+        self.timer_display = tk.Label(timer_row, text="⏱ Status: Queue Ready", bg=self.bg_card, fg="#58a6ff", font=("Segoe UI", 9, "bold"))
         self.timer_display.pack(side=tk.LEFT)
 
         self.stats_lbl = ttk.Label(timer_row, text="📊 Progress: 0 / 0 | Sent: 0", style="DarkMuted.TLabel")
         self.stats_lbl.pack(side=tk.RIGHT)
 
-        # --- Section 5: Start / Stop Controls & Live Terminal ---
+        # --- Card 5: Live Status Graph & Loading Bar ---
+        status_card = ttk.LabelFrame(container, text="  📈 5. Live Outreach Status & Interactive Progress Graph  ", style="DarkCard.TLabelframe", padding="10")
+        status_card.pack(fill=tk.X, pady=(0, 8))
+
+        # Progress bar + status text
+        pbar_row = ttk.Frame(status_card, style="Card.TFrame")
+        pbar_row.pack(fill=tk.X, pady=(0, 4))
+
+        self.progress_bar = ttk.Progressbar(pbar_row, style="Green.Horizontal.TProgressbar", mode="determinate", maximum=100, value=0)
+        self.progress_bar.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+
+        self.progress_pct_lbl = tk.Label(pbar_row, text="0%", bg=self.bg_card, fg="#2ea043", font=("Segoe UI", 10, "bold"), width=5)
+        self.progress_pct_lbl.pack(side=tk.RIGHT)
+
+        # Canvas for Status Bar Graph
+        graph_box = ttk.Frame(status_card, style="Card.TFrame")
+        graph_box.pack(fill=tk.X, pady=(4, 2))
+
+        self.graph_canvas = tk.Canvas(graph_box, bg="#0d1117", height=42, highlightthickness=1, highlightbackground=self.border_card)
+        self.graph_canvas.pack(fill=tk.X, expand=True)
+        self.graph_canvas.bind("<Configure>", lambda e: self._draw_status_graph())
+
+        self.graph_legend_lbl = tk.Label(status_card, text="🟩 Sent: 0 (0%)  |  🟦 Pending: 0 (0%)  |  🟥 Skipped / Error: 0 (0%)",
+                                         bg=self.bg_card, fg=self.fg_muted, font=("Segoe UI", 8))
+        self.graph_legend_lbl.pack(anchor=tk.W, pady=(2, 0))
+
+        # --- Section 6: Start / Stop Controls & Live Terminal ---
         ctrl_frame = ttk.Frame(container, style="Root.TFrame")
-        ctrl_frame.pack(fill=tk.X, pady=(0, 8))
+        ctrl_frame.pack(fill=tk.X, pady=(0, 6))
 
         self.start_btn = ttk.Button(ctrl_frame, text="🚀 START AUTOMATED OUTREACH", command=self.request_start_automation, style="ActionGreen.TButton")
-        self.start_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 6))
+        self.start_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 6), ipady=3)
 
         self.stop_btn = ttk.Button(ctrl_frame, text="🛑 EMERGENCY STOP", command=self.stop_automation, state=tk.DISABLED, style="DangerRed.TButton")
-        self.stop_btn.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(6, 0))
+        self.stop_btn.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(6, 0), ipady=3)
 
         # Terminal Log
         log_frame = ttk.LabelFrame(container, text="  🩺 Medical Dispatch Live Audit Terminal  ", style="DarkCard.TLabelframe", padding="8")
         log_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.log_text = tk.Text(log_frame, height=5, state=tk.DISABLED, wrap=tk.WORD, bg="#0d1117", fg="#7ee787",
+        self.log_text = tk.Text(log_frame, height=4, state=tk.DISABLED, wrap=tk.WORD, bg="#0d1117", fg="#7ee787",
                                 insertbackground="#f0f6fc", relief="flat", font=("Consolas", 8),
                                 highlightbackground=self.border_card, highlightthickness=1)
         self.log_text.pack(fill=tk.BOTH, expand=True)
+
+    def _draw_status_graph(self, sent: int = 0, pending: int = 0, errors: int = 0):
+        self.graph_canvas.delete("all")
+        w = self.graph_canvas.winfo_width()
+        h = self.graph_canvas.winfo_height()
+        if w <= 1:
+            w = 860
+        if h <= 1:
+            h = 42
+
+        total = sent + pending + errors
+        if total == 0:
+            # Draw placeholder background
+            self.graph_canvas.create_rectangle(0, 0, w, h, fill="#161b22", outline="")
+            self.graph_canvas.create_text(w // 2, h // 2, text="Load spreadsheet to initialize live status graph", fill="#484f58", font=("Segoe UI", 9, "italic"))
+            return
+
+        sent_pct = (sent / total)
+        pending_pct = (pending / total)
+        err_pct = (errors / total)
+
+        sent_w = int(w * sent_pct)
+        pending_w = int(w * pending_pct)
+        err_w = w - sent_w - pending_w
+
+        # Draw segmented colored bar
+        x_curr = 0
+        if sent_w > 0:
+            self.graph_canvas.create_rectangle(x_curr, 0, x_curr + sent_w, h, fill="#238636", outline="")
+            if sent_w > 50:
+                self.graph_canvas.create_text(x_curr + sent_w // 2, h // 2, text=f"Sent: {sent} ({int(sent_pct*100)}%)", fill="#ffffff", font=("Segoe UI", 8, "bold"))
+            x_curr += sent_w
+
+        if pending_w > 0:
+            self.graph_canvas.create_rectangle(x_curr, 0, x_curr + pending_w, h, fill="#1f6feb", outline="")
+            if pending_w > 50:
+                self.graph_canvas.create_text(x_curr + pending_w // 2, h // 2, text=f"Pending: {pending} ({int(pending_pct*100)}%)", fill="#ffffff", font=("Segoe UI", 8, "bold"))
+            x_curr += pending_w
+
+        if err_w > 0:
+            self.graph_canvas.create_rectangle(x_curr, 0, w, h, fill="#da3633", outline="")
+            if err_w > 50:
+                self.graph_canvas.create_text(x_curr + err_w // 2, h // 2, text=f"Error/Skip: {errors}", fill="#ffffff", font=("Segoe UI", 8, "bold"))
+
+        legend_text = f"🟩 Sent: {sent} ({sent_pct*100:.1f}%)   |   🟦 Pending: {pending} ({pending_pct*100:.1f}%)   |   🟥 Skipped / Error: {errors} ({err_pct*100:.1f}%)   |   Total: {total}"
+        self.graph_legend_lbl.config(text=legend_text)
 
     def _load_template_file(self, idx: int):
         path = filedialog.askopenfilename(
@@ -362,10 +463,22 @@ class ModernDarkZohoAutomationApp:
             status_col = next((c for c in df.columns if c.strip().lower() == "status"), None)
             total = len(df)
             sent = 0
+            errors = 0
             if status_col:
-                sent = (df[status_col].astype(str).str.strip().str.upper() == "SENT").sum()
+                status_series = df[status_col].astype(str).str.strip().str.upper()
+                sent = (status_series == "SENT").sum()
+                errors = status_series.str.startswith("ERROR").sum() + (status_series == "INVALID_EMAIL").sum()
 
-            pending = total - sent
+            pending = total - sent - errors
+            self.total_rows_count = total
+            self.sent_rows_count = sent
+
+            # Update progress bar and live status graph
+            pct = int((sent / total * 100)) if total > 0 else 0
+            self.progress_bar["value"] = pct
+            self.progress_pct_lbl.config(text=f"{pct}%")
+            self._draw_status_graph(sent=sent, pending=pending, errors=errors)
+
             self.stats_lbl.config(text=f"Total: {total} | Sent: {sent} | Pending: {pending}")
             self.log(f"Workbook loaded: {total} total rows ({sent} already SENT, {pending} ready).")
 
@@ -643,8 +756,18 @@ class ModernDarkZohoAutomationApp:
                 except Exception:
                     pass
 
-            self.root.after(0, lambda s=sent_count, t=total_in_batch: self.stats_lbl.config(
-                text=f"Batch Progress: {s}/{t} Sent"
+            # Recalculate stats for live status graph and progress bar
+            curr_status_series = df[status_col].astype(str).str.strip().str.upper()
+            curr_sent = (curr_status_series == "SENT").sum()
+            curr_errors = curr_status_series.str.startswith("ERROR").sum() + (curr_status_series == "INVALID_EMAIL").sum()
+            curr_pending = len(df) - curr_sent - curr_errors
+            curr_pct = int((curr_sent / len(df) * 100)) if len(df) > 0 else 0
+
+            self.root.after(0, lambda s=curr_sent, t=len(df), p=curr_pending, e=curr_errors, pct=curr_pct: (
+                self.stats_lbl.config(text=f"Total: {t} | Sent: {s} | Pending: {p}"),
+                self.progress_bar.config(value=pct),
+                self.progress_pct_lbl.config(text=f"{pct}%"),
+                self._draw_status_graph(sent=s, pending=p, errors=e)
             ))
 
             # Anti-bot human delay
