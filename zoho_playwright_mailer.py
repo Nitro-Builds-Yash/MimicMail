@@ -478,10 +478,12 @@ class ModernDarkZohoAutomationApp:
         status_col = next((c for c in df.columns if c.strip().lower() == "status"), "Status")
         if status_col not in df.columns:
             df[status_col] = ""
+        df[status_col] = df[status_col].astype(object)
 
         timestamp_col = next((c for c in df.columns if c.strip().lower() == "sent_at"), "Sent_At")
         if timestamp_col not in df.columns:
             df[timestamp_col] = ""
+        df[timestamp_col] = df[timestamp_col].astype(object)
 
         pending_indices = [
             i for i, row in df.iterrows()
@@ -536,14 +538,14 @@ class ModernDarkZohoAutomationApp:
             try:
                 self._send_in_browser(page, r_email, personalized_subject, personalized_body)
                 sent_count += 1
-                df.loc[r_idx, status_col] = "SENT"
-                df.loc[r_idx, timestamp_col] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                df.at[r_idx, status_col] = str("SENT")
+                df.at[r_idx, timestamp_col] = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
                 df.to_excel(excel_path, index=False)
                 self.log(f"SUCCESS: Email dispatched to {r_email} & saved to Excel.")
             except Exception as err:
                 # Catch any unexpected row errors, log, record to Excel, close compose if stuck, and continue with next recipient!
                 self.log(f"SKIPPED ROW {r_idx + 1} ({r_email}) due to error: {err}")
-                df.loc[r_idx, status_col] = f"ERROR: {str(err)[:50]}"
+                df.at[r_idx, status_col] = str(f"ERROR: {str(err)[:50]}")
                 df.to_excel(excel_path, index=False)
                 try:
                     # Press Escape or discard draft to keep browser clean for next recipient
