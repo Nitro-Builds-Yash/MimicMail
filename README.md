@@ -136,14 +136,13 @@ python zoho_playwright_mailer.py
 ---
 
 ## 📋 Registry Column Schema
+Only 3 standard columns are required in your spreadsheet. Your original Excel file remains 100% clean and untouched (no automatic status or timestamp columns are written into your file):
 
 | Column Name | Required | Description | Example |
 |:---|:---:|:---|:---|
-| `name` | **Yes** | Full name of recipient | `Dr. Sarah Jenkins` |
+| `name` | **Yes** | Full name of recipient (used for `{name}` in body) | `Dr. Sarah Jenkins` |
 | `email` | **Yes** | Destination email address | `s.jenkins@hospital.org` |
 | `title` | **Yes** | Dynamic title / designation used in subject and body | `Chief of Oncology` |
-| `Status` | *Auto* | Populated by engine upon completion | `SENT` |
-| `Sent_At` | *Auto* | Timestamp recorded when sent | `2026-10-07 14:32:05` |
 
 ---
 

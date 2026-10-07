@@ -200,9 +200,18 @@ class ModernDarkZohoAutomationApp:
         badge_box = tk.Frame(header_row, bg="#ffffff")
         badge_box.pack(side=tk.RIGHT)
 
-        badge_lbl = tk.Label(badge_box, text="ﮩـﮩ/ﮩ\/ـ ⚕️ OFFICIAL CLINICAL PLATFORM", bg="#fdf2f3", fg=self.accent_red,
-                             font=("Segoe UI", 8, "bold"), padx=10, pady=5, relief="solid", bd=1, highlightbackground=self.accent_red_border)
-        badge_lbl.pack(anchor=tk.E)
+        badge_content = tk.Frame(badge_box, bg="#fdf2f3", highlightbackground=self.accent_red_border, highlightthickness=1, padx=6, pady=3)
+        badge_content.pack(side=tk.RIGHT)
+
+        # 3D Live Glowing ECG Heartbeat Lifeline Monitor Canvas
+        self.ecg_canvas = tk.Canvas(badge_content, width=86, height=26, bg="#1a0407", highlightthickness=1, highlightbackground="#cf142b")
+        self.ecg_canvas.pack(side=tk.LEFT, padx=(2, 8))
+        self.ecg_step = 0
+        self._animate_ecg_heartbeat()
+
+        badge_lbl = tk.Label(badge_content, text="OFFICIAL CLINICAL PLATFORM", bg="#fdf2f3", fg=self.accent_red,
+                             font=("Segoe UI", 8, "bold"))
+        badge_lbl.pack(side=tk.LEFT, padx=(0, 4))
 
         # =========================================================================
         # 2. TWO-COLUMN MAIN BODY (Left: Session & Templates | Right: Status & Actions)
@@ -407,6 +416,60 @@ class ModernDarkZohoAutomationApp:
 
         legend_text = f"🟥 Sent: {sent} ({sent_pct*100:.0f}%)   |   ⬜ Pending: {pending} ({pending_pct*100:.0f}%)   |   ⚠️ Errors: {errors}"
         self.graph_legend_lbl.config(text=legend_text)
+
+    def _animate_ecg_heartbeat(self):
+        """Draws a live, animated 3D-styled medical ECG heartbeat pulse wave with a glowing lead dot."""
+        if not hasattr(self, "ecg_canvas") or not self.ecg_canvas.winfo_exists():
+            return
+
+        w = 86
+        h = 26
+        mid_y = h / 2.0
+
+        self.ecg_canvas.delete("all")
+
+        # 1. Subtle 3D background grid lines (medical monitor style)
+        for gy in [6, 13, 20]:
+            self.ecg_canvas.create_line(0, gy, w, gy, fill="#2b0d13", width=1)
+        for gx in range(10, w, 15):
+            self.ecg_canvas.create_line(gx, 0, gx, h, fill="#2b0d13", width=1)
+
+        # 2. Wave pattern template (normalized y-offsets around center)
+        # ECG rhythm: baseline -> small P wave -> Q dip -> sharp R spike -> S dip -> T wave -> baseline
+        pattern = [0, 0, 0, -2, -1, 0, 0, 2, -10, 6, -1, 0, -3, -4, -2, 0, 0, 0, 0, 0]
+        pat_len = len(pattern)
+
+        points = []
+        for x in range(0, w, 2):
+            idx = int((x + self.ecg_step * 2) / 3) % pat_len
+            y = mid_y + pattern[idx]
+            points.append((x, y))
+
+        # 3. Draw 3D shadow/ambient glow trace (deeper crimson)
+        for i in range(len(points) - 1):
+            x1, y1 = points[i]
+            x2, y2 = points[i + 1]
+            self.ecg_canvas.create_line(x1, y1 + 1.2, x2, y2 + 1.2, fill="#700816", width=2.5)
+
+        # 4. Draw bright neon primary pulse line
+        for i in range(len(points) - 1):
+            x1, y1 = points[i]
+            x2, y2 = points[i + 1]
+            self.ecg_canvas.create_line(x1, y1, x2, y2, fill="#ff2a44", width=1.5)
+
+        # 5. Glowing 3D lead pulse dot that travels across the monitor
+        lead_x = (self.ecg_step * 3) % w
+        lead_idx = int((lead_x + self.ecg_step * 2) / 3) % pat_len
+        lead_y = mid_y + pattern[lead_idx]
+
+        # Outer soft glow
+        self.ecg_canvas.create_oval(lead_x - 4, lead_y - 4, lead_x + 4, lead_y + 4, fill="#a80b1e", outline="")
+        # Bright 3D highlight core
+        self.ecg_canvas.create_oval(lead_x - 2, lead_y - 2, lead_x + 2, lead_y + 2, fill="#ffffff", outline="#ff4d64")
+
+        self.ecg_step += 1
+        # Schedule next frame at ~30 FPS for smooth live cardiac monitoring
+        self.root.after(35, self._animate_ecg_heartbeat)
 
     def _load_template_file(self, idx: int):
         path = filedialog.askopenfilename(
@@ -716,20 +779,16 @@ class ModernDarkZohoAutomationApp:
         email_col = col_map["email"]
         title_col = col_map["title"]
 
-        status_col = next((c for c in df.columns if c.strip().lower() == "status"), "Status")
-        if status_col not in df.columns:
-            df[status_col] = ""
-        df[status_col] = df[status_col].astype(object)
-
-        timestamp_col = next((c for c in df.columns if c.strip().lower() == "sent_at"), "Sent_At")
-        if timestamp_col not in df.columns:
-            df[timestamp_col] = ""
-        df[timestamp_col] = df[timestamp_col].astype(object)
-
-        pending_indices = [
-            i for i, row in df.iterrows()
-            if str(row[status_col]).strip().upper() != "SENT"
-        ]
+        total_records = len(df)
+        has_status_col = any(c.strip().lower() == "status" for c in df.columns)
+        if has_status_col:
+            status_col_name = next(c for c in df.columns if c.strip().lower() == "status")
+            status_series = df[status_col_name].astype(str).str.strip().str.upper()
+            pending_indices = [i for i, val in enumerate(status_series) if val != "SENT"]
+            prev_sent_count = (status_series == "SENT").sum()
+        else:
+            pending_indices = list(range(total_records))
+            prev_sent_count = 0
 
         if not pending_indices:
             self.log("All rows in this spreadsheet are already marked as SENT.")
@@ -743,6 +802,7 @@ class ModernDarkZohoAutomationApp:
         self.log(f"Dispatching batch of {total_in_batch} recipients across {len(body_tmpls)} random template pool...")
 
         sent_count = 0
+        errors_in_session = 0
         for q_idx, r_idx in enumerate(target_indices):
             if self.stop_requested:
                 self.log("Automation interrupted by user.")
@@ -757,8 +817,7 @@ class ModernDarkZohoAutomationApp:
             EMAIL_REGEX = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w+$")
             if not r_email or not EMAIL_REGEX.match(r_email):
                 self.log(f"Row {r_idx + 1}: SKIPPED (Invalid email address '{r_email}')")
-                df.loc[r_idx, status_col] = "INVALID_EMAIL"
-                df.to_excel(excel_path, index=False)
+                errors_in_session += 1
                 continue
 
             # Randomly select 1 template from the user-provided templates
@@ -787,15 +846,11 @@ class ModernDarkZohoAutomationApp:
             try:
                 self._send_in_browser(page, r_email, personalized_subject, personalized_body)
                 sent_count += 1
-                df.at[r_idx, status_col] = str("SENT")
-                df.at[r_idx, timestamp_col] = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-                df.to_excel(excel_path, index=False)
-                self.log(f"SUCCESS: Email dispatched to {r_email} & saved to Excel.")
+                self.log(f"SUCCESS: Email dispatched to {r_email}.")
             except Exception as err:
-                # Catch any unexpected row errors, log, record to Excel, close compose if stuck, and continue with next recipient!
+                # Catch any unexpected row errors, log, close compose if stuck, and continue with next recipient
+                errors_in_session += 1
                 self.log(f"SKIPPED ROW {r_idx + 1} ({r_email}) due to error: {err}")
-                df.at[r_idx, status_col] = str(f"ERROR: {str(err)[:50]}")
-                df.to_excel(excel_path, index=False)
                 try:
                     # Press Escape or discard draft to keep browser clean for next recipient
                     page.keyboard.press("Escape")
@@ -803,14 +858,13 @@ class ModernDarkZohoAutomationApp:
                 except Exception:
                     pass
 
-            # Recalculate stats for live status graph and progress bar
-            curr_status_series = df[status_col].astype(str).str.strip().str.upper()
-            curr_sent = (curr_status_series == "SENT").sum()
-            curr_errors = curr_status_series.str.startswith("ERROR").sum() + (curr_status_series == "INVALID_EMAIL").sum()
-            curr_pending = len(df) - curr_sent - curr_errors
-            curr_pct = int((curr_sent / len(df) * 100)) if len(df) > 0 else 0
+            # Update live stats and status graph purely in UI memory without modifying the user's Excel sheet
+            curr_sent = prev_sent_count + sent_count
+            curr_errors = errors_in_session
+            curr_pending = max(0, total_records - curr_sent - curr_errors)
+            curr_pct = int((curr_sent / total_records * 100)) if total_records > 0 else 0
 
-            self.root.after(0, lambda s=curr_sent, t=len(df), p=curr_pending, e=curr_errors, pct=curr_pct: (
+            self.root.after(0, lambda s=curr_sent, t=total_records, p=curr_pending, e=curr_errors, pct=curr_pct: (
                 self.stats_lbl.config(text=f"Total: {t} | Sent: {s} | Pending: {p}"),
                 self.progress_bar.config(value=pct),
                 self.progress_pct_lbl.config(text=f"{pct}%"),
