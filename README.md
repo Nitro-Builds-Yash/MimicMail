@@ -1,22 +1,35 @@
-# Zoho Mail Merge — Review and Send
+# ⚕️ Pulsus MedScout — MimicMail 🩺
 
-A desktop helper for preparing personalized messages from a local Excel or CSV workbook. It opens Zoho Mail in the default browser, previews one recipient at a time, copies the message for review, and records rows that the user confirms were manually sent.
+A clinical-grade, humanized outreach automation engine built for Zoho Mail with Playwright and a dark medical interface.
 
-The app does not collect or store a Zoho password, log in to Zoho, click Send, or dispatch messages through SMTP. After a workbook loads it opens Zoho Mail in the default browser; the user signs in and sends each message in the visible Zoho page. The selected 1–5 minute interval locks the app's Open/Copy controls between confirmed sends. It cannot prevent a user from sending directly in the browser during that interval. Use only with recipients who agreed to receive the messages and follow Zoho's current policies.
+---
 
-## Run
+## 🔬 Features
+- **🌐 Single-Browser Persistent Session:** Authenticate once in your standard browser; the background queue operates directly in that tab without repeated logins.
+- **⚕️ Clinical Dark Mode Interface:** Professional dark UI with clinical symbols (`⚕️`, `🩺`, `🔬`, `🧬`, `🏥`), live countdown pacing, and console audit logs.
+- **📝 Times New Roman HTML Rendering:** Automatic formatting in Times New Roman (12pt) with zero leading spaces before `Dear {name},`.
+- **📌 Dynamic Subject Resolution:** Automatically sets each recipient's subject line to their exact `title` from Excel.
+- **🛡️ Resilient Batch Validation:** Automatically detects and skips invalid email addresses without crashing the queue.
+- **⏱️ Anti-Bot Behavioral Jitter:** Staggers dispatches with 1–5 minute configurable intervals + randomized jitter to maintain high deliverability and account safety.
 
-1. Install Python 3.10 or newer.
-2. From this folder, run `python -m pip install -e .`.
-3. Run `zoho-mail-merge` or `python -m zoho_mail_automation.app`.
-4. Drop an `.xlsx` or `.csv` file in the drop area (or browse). The first worksheet is used for Excel files.
-5. Enter a Zoho login ID if desired and choose a 1–5 minute interval. The app opens Zoho Mail; enter your password on Zoho's page.
-6. Review the prepared message, copy it to Zoho Mail, and send it yourself. Confirm **Mark sent & next** to update the workbook and progress bar.
+---
 
-Required workbook headers are exactly `name`, `email`, and `title` (lowercase). `Status` and `Sent_At` tracking columns are added when missing. Rows already marked `SENT` and invalid/incomplete rows are skipped. The `title` value is used as each recipient's subject; use **Copy subject** to copy it separately, and **Copy message** to copy the recipient, subject, and body preview. Edit the body template in the app; supported placeholders are `{name}`, `{email}`, and `{title}`. Progress counts rows you confirm were sent; it does not observe Zoho delivery.
+## 🚀 Getting Started
 
-## Privacy
+### 1. Requirements
+- Python 3.10+
+- Install dependencies:
+```bash
+pip install -r requirements.txt
+playwright install chromium
+```
 
-The app never asks for your Zoho password. Enter credentials only on Zoho's own page. Recipient data remains in the selected workbook. Do not commit recipient files or credentials.
+### 2. Launch
+```bash
+python zoho_playwright_mailer.py
+```
 
-See [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md), [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md), and [`docs/DECISIONS.md`](docs/DECISIONS.md).
+### 3. Usage Flow
+1. Click **`🌐 Launch Webmail & Sign In`** $\rightarrow$ log in to Zoho Mail in the browser window (leave the browser open).
+2. Click **`📁 Browse Registry (.xlsx)`** and select your Excel spreadsheet (`name`, `email`, `title`).
+3. Click **`🚀 START AUTOMATED OUTREACH`** $\rightarrow$ dispatches in the background while updating rows to `Status = SENT` on disk.
