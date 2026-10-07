@@ -13,7 +13,10 @@ from playwright.sync_api import sync_playwright
 from PIL import Image, ImageTk
 
 DEFAULT_SUBJECT = "{title}"
-LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pulsus_logo.png")
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOGO_PATH = os.path.join(_BASE_DIR, "assets", "pulsus_logo.png")
+if not os.path.exists(LOGO_PATH):
+    LOGO_PATH = os.path.join(_BASE_DIR, "pulsus_logo.png")
 
 # Default user-customizable HTML templates for the 5 slots
 SAMPLE_HTML_TEMPLATES = [
