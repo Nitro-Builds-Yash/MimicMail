@@ -200,7 +200,7 @@ class ModernDarkZohoAutomationApp:
         badge_box = tk.Frame(header_row, bg="#ffffff")
         badge_box.pack(side=tk.RIGHT)
 
-        badge_lbl = tk.Label(badge_box, text="OFFICIAL CLINICAL PLATFORM", bg="#fdf2f3", fg=self.accent_red,
+        badge_lbl = tk.Label(badge_box, text="ﮩـﮩ/ﮩ\/ـ ⚕️ OFFICIAL CLINICAL PLATFORM", bg="#fdf2f3", fg=self.accent_red,
                              font=("Segoe UI", 8, "bold"), padx=10, pady=5, relief="solid", bd=1, highlightbackground=self.accent_red_border)
         badge_lbl.pack(anchor=tk.E)
 
@@ -454,18 +454,54 @@ class ModernDarkZohoAutomationApp:
 
         try:
             df = pd.read_excel(path)
+            
+            # Validation 1: Check if workbook has rows
+            if df.empty or len(df) == 0:
+                messagebox.showwarning(
+                    "⚠️ Excel Not Set Properly",
+                    f"The selected Excel workbook is empty!\n\nFile: {os.path.basename(path)}\n\nPlease ensure your sheet contains data rows under the headers: name, email, title."
+                )
+                self.log(f"⚠️ Warning: Selected file '{os.path.basename(path)}' is empty.")
+                return
+
+            # Validation 2: Check required columns
             req = {"name", "email", "title"}
-            col_map = {c.strip().lower(): c for c in df.columns}
+            col_map = {str(c).strip().lower(): c for c in df.columns}
             missing = req - set(col_map.keys())
 
             if missing:
-                messagebox.showerror("Invalid Headers", f"The Excel sheet must contain 'name', 'email', and 'title'.\n\nMissing: {', '.join(missing)}")
+                missing_str = ", ".join(f"'{m}'" for m in missing)
+                found_str = ", ".join(f"'{c}'" for c in df.columns) if len(df.columns) > 0 else "None"
+                messagebox.showwarning(
+                    "⚠️ Excel Not Set Properly",
+                    f"The Excel file is not formatted correctly!\n\n"
+                    f"Missing required columns: {missing_str}\n"
+                    f"Columns found in file: {found_str}\n\n"
+                    f"Please make sure your Excel spreadsheet has the header columns:\n"
+                    f"• name (Recipient's name)\n"
+                    f"• email (Recipient's email)\n"
+                    f"• title (Recipient's clinical role or subject)"
+                )
+                self.log(f"⚠️ Warning: '{os.path.basename(path)}' is missing required columns: {missing_str}")
                 return
+
+            # Validation 3: Check for empty essential values
+            name_col = col_map["name"]
+            email_col = col_map["email"]
+            empty_emails = df[email_col].isna().sum() + (df[email_col].astype(str).str.strip() == "").sum()
+            
+            if empty_emails > 0:
+                messagebox.showwarning(
+                    "⚠️ Excel Warning — Blank Emails Detected",
+                    f"Note: Found {empty_emails} row(s) with missing or blank email addresses.\n"
+                    f"These will be flagged or skipped during outreach."
+                )
+                self.log(f"⚠️ Note: {empty_emails} rows have missing email values.")
 
             self.excel_file_path = path
             self.file_label.config(text=f"Loaded: {os.path.basename(path)}", foreground=self.fg_primary)
 
-            status_col = next((c for c in df.columns if c.strip().lower() == "status"), None)
+            status_col = next((c for c in df.columns if str(c).strip().lower() == "status"), None)
             total = len(df)
             sent = 0
             errors = 0
@@ -485,10 +521,16 @@ class ModernDarkZohoAutomationApp:
             self._draw_status_graph(sent=sent, pending=pending, errors=errors)
 
             self.stats_lbl.config(text=f"Total: {total} | Sent: {sent} | Pending: {pending}")
-            self.log(f"Workbook loaded: {total} total rows ({sent} already SENT, {pending} ready).")
+            self.log(f"Workbook loaded successfully: {total} total rows ({sent} already SENT, {pending} pending).")
 
         except Exception as e:
-            messagebox.showerror("File Error", f"Unable to read Excel file:\n{str(e)}")
+            messagebox.showwarning(
+                "⚠️ Excel Not Set Properly",
+                f"Unable to read or parse the Excel file.\n\n"
+                f"Error details:\n{str(e)}\n\n"
+                f"Please ensure the file is a valid .xlsx or .xls file and is not open/locked by another application."
+            )
+            self.log(f"⚠️ Excel parse error on '{os.path.basename(path)}': {str(e)}")
 
     def request_start_automation(self):
         if not self.excel_file_path or not os.path.exists(self.excel_file_path):
