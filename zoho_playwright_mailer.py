@@ -16,24 +16,24 @@ DEFAULT_BODY = """Dear {name},
 
 I hope this message finds you well.
 
-I am reaching out from Pulsus MedScout regarding your esteemed work and leadership as {title}.
+I am reaching out regarding your esteemed work and leadership as {title}.
 
-At Pulsus MedScout, we connect leading healthcare professionals, researchers, and clinical innovators to advance medical intelligence, global conferences, and scientific publications.
+We connect leading healthcare professionals, researchers, and innovators to advance intelligence, collaboration, and high-impact publications.
 
 We would be delighted to explore potential collaboration opportunities with you and share relevant updates aligned with your expertise.
 
 Looking forward to hearing from you.
 
 Best regards,
-Pulsus MedScout Team
-editorial@pulsus.com"""
+MimicMail Team
+outreach@mimicmail.com"""
 
 PROFILE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zoho_browser_profile")
 
 class ModernDarkZohoAutomationApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("Pulsus MedScout — Zoho Mail Outreach Automation")
+        self.root.title("MimicMail — Zoho Outreach Automation")
         self.root.geometry("880x880")
         self.root.minsize(780, 780)
 
@@ -137,13 +137,13 @@ class ModernDarkZohoAutomationApp:
         header_top_row = tk.Frame(hero_frame, bg=self.bg_card_alt)
         header_top_row.pack(fill=tk.X)
 
-        title_lbl = tk.Label(header_top_row, text="⚕️ PULSUS MEDSCOUT 🩺", bg=self.bg_card_alt, fg="#5bc0be", font=("Segoe UI", 16, "bold"))
+        title_lbl = tk.Label(header_top_row, text="⚕️ MIMICMAIL 🩺", bg=self.bg_card_alt, fg="#5bc0be", font=("Segoe UI", 16, "bold"))
         title_lbl.pack(side=tk.LEFT)
 
         badge_lbl = tk.Label(header_top_row, text="🔬 CLINICAL INTELLIGENCE EDITION", bg="#0b253a", fg="#64dfdf", font=("Segoe UI", 8, "bold"), padx=8, pady=3)
         badge_lbl.pack(side=tk.RIGHT)
 
-        sub_lbl = tk.Label(hero_frame, text="🏥 Medical Leadership & Healthcare Outreach Dispatcher | 🧬 Verified Researcher Automation",
+        sub_lbl = tk.Label(hero_frame, text="🏥 Medical Leadership & Healthcare Outreach Dispatcher | 🧬 Humanized Playwright Automation",
                            bg=self.bg_card_alt, fg="#90e0ef", font=("Segoe UI", 9))
         sub_lbl.pack(anchor=tk.W, pady=(4, 0))
 
