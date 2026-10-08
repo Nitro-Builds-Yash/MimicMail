@@ -157,6 +157,13 @@ Only 3 standard columns are required in your spreadsheet. Your original Excel fi
 
 ---
 
+## 👥 Contributors
+
+- **[Yash / Nitro-Builds-Yash](https://github.com/Nitro-Builds-Yash)** — Lead Developer & Architect
+- **[Shiva / sivaaws089-del](https://github.com/sivaaws089-del)** — Collaborator & Engineering Contributor
+
+---
+
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
