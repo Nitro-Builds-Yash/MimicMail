@@ -104,10 +104,22 @@ playwright install chromium
 ## 🖥️ Usage Workflow
 
 ### 1. Start the Application
-Run the launcher:
+
+#### Single Instance:
 ```bash
 python zoho_playwright_mailer.py
 ```
+
+#### Multiple Parallel Instances (Side-by-Side Without Interference):
+Run the parallel orchestrator to launch multiple windows simultaneously with isolated profiles and cookies:
+```bash
+# Launch 2 instances in parallel (default)
+python launch_parallel.py
+
+# Or launch any custom number of instances (e.g., 3 instances)
+python launch_parallel.py -n 3
+```
+*On Windows, you can also double-click **`launch_parallel.bat`** to start immediately.*
 
 ### 2. Connect Zoho Webmail
 1. Click **`🌐 Launch Zoho Webmail`** at the top-left of the Session card.
