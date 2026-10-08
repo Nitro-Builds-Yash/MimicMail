@@ -104,22 +104,14 @@ playwright install chromium
 ## 🖥️ Usage Workflow
 
 ### 1. Start the Application
-
-#### Single Instance:
 ```bash
 python zoho_playwright_mailer.py
 ```
 
-#### Multiple Parallel Instances (Side-by-Side Without Interference):
-Run the parallel orchestrator to launch multiple windows simultaneously with isolated profiles and cookies:
-```bash
-# Launch 2 instances in parallel (default)
-python launch_parallel.py
-
-# Or launch any custom number of instances (e.g., 3 instances)
-python launch_parallel.py -n 3
-```
-*On Windows, you can also double-click **`launch_parallel.bat`** to start immediately.*
+#### Running Multiple Instances / Profiles in Parallel:
+- **Inside the GUI (Card 1):** Click the **`➕ Launch Another Instance`** button to open additional independent MimicMail windows on-demand.
+- **Isolated Profiles:** Select any profile (`Instance 1`, `Instance 2`, etc.) from the **Profile / Instance** dropdown. Each profile retains its own dedicated cookies, session credentials, and cache so accounts run side-by-side without disturbing each other.
+- **Background Parallel Tabs (Card 3):** Set **`⚡ Parallel Background Tabs`** (from `1` up to `5`). MimicMail will spawn extra background tabs within your authenticated mailbox to dispatch emails simultaneously in parallel waves.
 
 ### 2. Connect Zoho Webmail
 1. Click **`🌐 Launch Zoho Webmail`** at the top-left of the Session card.

@@ -359,6 +359,15 @@ class ModernDarkZohoAutomationApp:
                                             variable=self.jitter_var, style="Dark.TCheckbutton")
         self.jitter_check.pack(anchor=tk.W)
 
+        # Multi-tab concurrency setting
+        tab_row = ttk.Frame(pacing_box, style="Card.TFrame")
+        tab_row.pack(fill=tk.X, pady=(6, 2))
+        ttk.Label(tab_row, text="⚡ Parallel Background Tabs:", style="Dark.TLabel").pack(side=tk.LEFT)
+        self.tabs_var = tk.IntVar(value=1)
+        self.tabs_spin = ttk.Spinbox(tab_row, from_=1, to=5, textvariable=self.tabs_var, width=5, state="readonly")
+        self.tabs_spin.pack(side=tk.RIGHT)
+        ttk.Label(pacing_box, text="(Dispatches across multiple tabs simultaneously)", style="DarkMuted.TLabel").pack(anchor=tk.W)
+
         # Section: LIVE STATUS & GRAPH
         status_card = ttk.LabelFrame(right_col, text="  4. Delivery Status & Graph  ", style="DarkCard.TLabelframe", padding="14")
         status_card.pack(fill=tk.BOTH, expand=True)
@@ -692,7 +701,8 @@ class ModernDarkZohoAutomationApp:
             "body_tmpls": active_templates,
             "base_mins": self.interval_var.get(),
             "use_jitter": self.jitter_var.get(),
-            "excel_path": self.excel_file_path
+            "excel_path": self.excel_file_path,
+            "parallel_tabs": max(1, self.tabs_var.get())
         }
         self._ensure_worker_started()
         self.cmd_queue.put(("START_AUTOMATION", params))
@@ -818,8 +828,8 @@ class ModernDarkZohoAutomationApp:
 
                         self.root.after(0, lambda: self.session_indicator.config(text="● In Mailbox & Automating", fg=self.accent_red))
 
-                        # 2. Run batch dispatch
-                        self._execute_batch(browser_page, data)
+                        # 2. Run batch dispatch across single or multiple background tabs
+                        self._execute_batch(browser_context, browser_page, data)
 
                     except Exception as batch_err:
                         self.log(f"Automation execution error: {batch_err}")
@@ -843,12 +853,13 @@ class ModernDarkZohoAutomationApp:
                 except Exception:
                     pass
 
-    def _execute_batch(self, page, params):
+    def _execute_batch(self, context, primary_page, params):
         excel_path = params["excel_path"]
         subj_tmpl = params["subj_tmpl"]
         body_tmpls = params.get("body_tmpls", [params.get("body_tmpl", "")])
         base_mins = params["base_mins"]
         use_jitter = params["use_jitter"]
+        parallel_tabs = params.get("parallel_tabs", 1)
 
         df = pd.read_excel(excel_path)
         col_map = {c.strip().lower(): c for c in df.columns}
@@ -877,85 +888,102 @@ class ModernDarkZohoAutomationApp:
         target_indices = pending_indices[:BATCH_CAP]
         total_in_batch = len(target_indices)
 
-        self.log(f"Dispatching batch of {total_in_batch} recipients across {len(body_tmpls)} random template pool...")
+        self.log(f"Dispatching batch of {total_in_batch} recipients across {parallel_tabs} parallel tab(s) with {len(body_tmpls)} template pool...")
 
         sent_count = 0
         errors_in_session = 0
-        for q_idx, r_idx in enumerate(target_indices):
+
+        # Create/manage pool of tabs inside this authenticated session
+        tab_pool = [primary_page]
+        if parallel_tabs > 1:
+            self.log(f"Spinning up {parallel_tabs - 1} extra background tab(s) for parallel processing...")
+            for t_idx in range(parallel_tabs - 1):
+                try:
+                    new_tab = context.new_page()
+                    new_tab.goto("https://mail.zoho.com/zm/")
+                    time.sleep(2)
+                    tab_pool.append(new_tab)
+                except Exception as t_err:
+                    self.log(f"Tab creation notice: {t_err}")
+
+        # Chunk the recipients into parallel slices according to active tab count
+        chunk_size = max(1, len(tab_pool))
+        for chunk_start in range(0, total_in_batch, chunk_size):
             if self.stop_requested:
                 self.log("Automation interrupted by user.")
                 break
 
-            row = df.loc[r_idx]
-            r_name = str(row[name_col]).strip() if pd.notna(row[name_col]) else "Valued Professional"
-            r_email = str(row[email_col]).strip() if pd.notna(row[email_col]) else ""
-            r_title = str(row[title_col]).strip() if pd.notna(row[title_col]) else "Professional"
+            current_chunk = target_indices[chunk_start:chunk_start + chunk_size]
 
-            import re
-            EMAIL_REGEX = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w+$")
-            if not r_email or not EMAIL_REGEX.match(r_email):
-                self.log(f"Row {r_idx + 1}: SKIPPED (Invalid email address '{r_email}')")
-                errors_in_session += 1
-                continue
+            for tab_idx, r_idx in enumerate(current_chunk):
+                if self.stop_requested:
+                    break
 
-            # Randomly select 1 template from the user-provided templates
-            chosen_body_tmpl = random.choice(body_tmpls)
+                active_page = tab_pool[tab_idx % len(tab_pool)]
+                row = df.loc[r_idx]
+                r_name = str(row[name_col]).strip() if pd.notna(row[name_col]) else "Valued Professional"
+                r_email = str(row[email_col]).strip() if pd.notna(row[email_col]) else ""
+                r_title = str(row[title_col]).strip() if pd.notna(row[title_col]) else "Professional"
 
-            # Robust placeholder substitution (supports {name}, {title}, {email} in any case/whitespace)
-            personalized_subject = subj_tmpl
-            for ph, val in [("{title}", r_title), ("{name}", r_name), ("{TITLE}", r_title), ("{NAME}", r_name)]:
-                personalized_subject = personalized_subject.replace(ph, val)
+                import re
+                EMAIL_REGEX = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w+$")
+                if not r_email or not EMAIL_REGEX.match(r_email):
+                    self.log(f"Row {r_idx + 1}: SKIPPED (Invalid email address '{r_email}')")
+                    errors_in_session += 1
+                    continue
 
-            # Bold name and title in the rendered email body as requested
-            r_name_bold = f"<b>{r_name}</b>"
-            r_title_bold = f"<b>{r_title}</b>"
+                chosen_body_tmpl = random.choice(body_tmpls)
 
-            personalized_body = chosen_body_tmpl
-            for ph, val in [("{name}", r_name_bold), ("{title}", r_title_bold), ("{email}", r_email),
-                            ("{NAME}", r_name_bold), ("{TITLE}", r_title_bold), ("{EMAIL}", r_email)]:
-                personalized_body = personalized_body.replace(ph, val)
+                personalized_subject = subj_tmpl
+                for ph, val in [("{title}", r_title), ("{name}", r_name), ("{TITLE}", r_title), ("{NAME}", r_name)]:
+                    personalized_subject = personalized_subject.replace(ph, val)
 
-            # Strip any leading spaces or lines so 'Dear {name}' always starts at character 0
-            personalized_body = personalized_body.strip()
+                r_name_bold = f"<b>{r_name}</b>"
+                r_title_bold = f"<b>{r_title}</b>"
 
-            self.log(f"Prepared subject: '{personalized_subject}'")
-            self.log(f"Dispatching ({q_idx + 1}/{total_in_batch}) to {r_name} <{r_email}> (Bold Name & Title)...")
+                personalized_body = chosen_body_tmpl
+                for ph, val in [("{name}", r_name_bold), ("{title}", r_title_bold), ("{email}", r_email),
+                                ("{NAME}", r_name_bold), ("{TITLE}", r_title_bold), ("{EMAIL}", r_email)]:
+                    personalized_body = personalized_body.replace(ph, val)
 
-            try:
-                self._send_in_browser(page, r_email, personalized_subject, personalized_body)
-                sent_count += 1
-                self.log(f"SUCCESS: Email dispatched to {r_email}.")
-            except Exception as err:
-                # Catch any unexpected row errors, log, close compose if stuck, and continue with next recipient
-                errors_in_session += 1
-                self.log(f"SKIPPED ROW {r_idx + 1} ({r_email}) due to error: {err}")
+                personalized_body = personalized_body.strip()
+
+                tab_label = f"Tab {tab_idx + 1}" if len(tab_pool) > 1 else "Primary"
+                self.log(f"[{tab_label}] Dispatching ({chunk_start + tab_idx + 1}/{total_in_batch}) to {r_name} <{r_email}>...")
+
                 try:
-                    # Press Escape or discard draft to keep browser clean for next recipient
-                    page.keyboard.press("Escape")
-                    time.sleep(1)
-                except Exception:
-                    pass
+                    self._send_in_browser(active_page, r_email, personalized_subject, personalized_body)
+                    sent_count += 1
+                    self.log(f"SUCCESS [{tab_label}]: Email dispatched to {r_email}.")
+                except Exception as err:
+                    errors_in_session += 1
+                    self.log(f"SKIPPED ROW {r_idx + 1} ({r_email}) due to error: {err}")
+                    try:
+                        active_page.keyboard.press("Escape")
+                        time.sleep(1)
+                    except Exception:
+                        pass
 
-            # Update live stats and status graph purely in UI memory without modifying the user's Excel sheet
-            curr_sent = prev_sent_count + sent_count
-            curr_errors = errors_in_session
-            curr_pending = max(0, total_records - curr_sent - curr_errors)
-            curr_pct = int((curr_sent / total_records * 100)) if total_records > 0 else 0
+                # Update live stats and status graph purely in UI memory
+                curr_sent = prev_sent_count + sent_count
+                curr_errors = errors_in_session
+                curr_pending = max(0, total_records - curr_sent - curr_errors)
+                curr_pct = int((curr_sent / total_records * 100)) if total_records > 0 else 0
 
-            self.root.after(0, lambda s=curr_sent, t=total_records, p=curr_pending, e=curr_errors, pct=curr_pct: (
-                self.stats_lbl.config(text=f"Total: {t} | Sent: {s} | Pending: {p}"),
-                self.progress_bar.config(value=pct),
-                self.progress_pct_lbl.config(text=f"{pct}%"),
-                self._draw_status_graph(sent=s, pending=p, errors=e)
-            ))
+                self.root.after(0, lambda s=curr_sent, t=total_records, p=curr_pending, e=curr_errors, pct=curr_pct: (
+                    self.stats_lbl.config(text=f"Total: {t} | Sent: {s} | Pending: {p}"),
+                    self.progress_bar.config(value=pct),
+                    self.progress_pct_lbl.config(text=f"{pct}%"),
+                    self._draw_status_graph(sent=s, pending=p, errors=e)
+                ))
 
-            # Anti-bot human delay
-            if q_idx < total_in_batch - 1 and not self.stop_requested:
+            # Anti-bot human delay between dispatch waves
+            if chunk_start + chunk_size < total_in_batch and not self.stop_requested:
                 base_sec = base_mins * 60.0
                 jitter_sec = random.randint(-25, 35) if use_jitter else 0
-                sleep_sec = max(30.0, base_sec + jitter_sec)
+                sleep_sec = max(20.0, base_sec + jitter_sec)
 
-                self.log(f"Pacing: Resting for {sleep_sec:.0f} seconds before next recipient...")
+                self.log(f"Pacing: Resting for {sleep_sec:.0f} seconds before next dispatch wave...")
 
                 remaining = int(sleep_sec)
                 while remaining > 0 and not self.stop_requested:
@@ -965,6 +993,14 @@ class ModernDarkZohoAutomationApp:
                     ))
                     time.sleep(1)
                     remaining -= 1
+
+        # Clean up any auxiliary tabs created
+        if len(tab_pool) > 1:
+            for extra_tab in tab_pool[1:]:
+                try:
+                    extra_tab.close()
+                except Exception:
+                    pass
 
         self.log(f"Batch completed! Total sent: {sent_count}")
         self.root.after(0, lambda s=sent_count: messagebox.showinfo("Done", f"Automation finished!\nTotal sent: {s}"))
