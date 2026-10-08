@@ -7,7 +7,7 @@ import threading
 import datetime
 from pathlib import Path
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, font as tkfont
 import pandas as pd
 from playwright.sync_api import sync_playwright
 from PIL import Image, ImageTk
@@ -317,9 +317,11 @@ class ModernDarkZohoAutomationApp:
             clear_btn = ttk.Button(tb, text="🗑 Clear", command=lambda idx=i: self._clear_template_slot(idx), style="StandardDark.TButton")
             clear_btn.pack(side=tk.RIGHT, padx=4)
 
+            times_font = tkfont.Font(family="Times New Roman", size=11)
             txt = tk.Text(tab_frame, height=6, wrap=tk.WORD, bg="#ffffff", fg="#1f1d1a",
                           insertbackground="#cf142b", highlightbackground=self.border_card,
-                          highlightcolor=self.accent_red, highlightthickness=1, relief="flat", font=("Times New Roman", 11))
+                          highlightcolor=self.accent_red, highlightthickness=1, relief="flat", font=times_font)
+            txt.configure(font=times_font)
             initial_content = SAMPLE_HTML_TEMPLATES[i] if i < len(SAMPLE_HTML_TEMPLATES) else ""
             txt.insert(tk.END, initial_content)
             txt.pack(fill=tk.BOTH, expand=True, pady=(0, 2))
@@ -1127,14 +1129,24 @@ class ModernDarkZohoAutomationApp:
         self.log(f"Inserting body text ({len(body)} characters) in Times New Roman...")
         filled_body = False
 
-        # Convert body (supports raw HTML drops or text) to styled HTML paragraphs in Times New Roman
+        # Convert body (supports raw HTML drops or text) to styled HTML paragraphs strictly enforcing Times New Roman
         if "<p" in body.lower() or "<div" in body.lower() or "<br" in body.lower():
-            # Already HTML formatted, wrap in Times New Roman font container
-            styled_html = f"<div style=\"font-family: 'Times New Roman', Times, serif; font-size: 12pt; color: #000000; line-height: 1.5;\">{body}</div>"
+            # Already HTML formatted: force Times New Roman on container and replace any existing font-family declarations
+            clean_body = body
+            # Ensure Times New Roman font container wraps all content
+            styled_html = (
+                f"<div style=\"font-family: 'Times New Roman', Times, serif !important; font-size: 12pt; color: #000000; line-height: 1.5;\">"
+                f"<style>body, div, p, span, b, strong {{ font-family: 'Times New Roman', Times, serif !important; }}</style>"
+                f"{clean_body}</div>"
+            )
         else:
-            # Plain text converted to styled paragraphs
-            html_paragraphs = "".join([f"<p style=\"margin: 0 0 10px 0; font-family: 'Times New Roman', Times, serif; font-size: 12pt;\">{p.strip()}</p>" if p.strip() else "<p><br></p>" for p in body.split("\n\n")])
-            styled_html = f"<div style=\"font-family: 'Times New Roman', Times, serif; font-size: 12pt; color: #000000; line-height: 1.5;\">{html_paragraphs}</div>"
+            # Plain text converted to styled paragraphs strictly in Times New Roman
+            html_paragraphs = "".join([f"<p style=\"margin: 0 0 10px 0; font-family: 'Times New Roman', Times, serif !important; font-size: 12pt;\">{p.strip()}</p>" if p.strip() else "<p><br></p>" for p in body.split("\n\n")])
+            styled_html = (
+                f"<div style=\"font-family: 'Times New Roman', Times, serif !important; font-size: 12pt; color: #000000; line-height: 1.5;\">"
+                f"<style>body, div, p, span, b, strong {{ font-family: 'Times New Roman', Times, serif !important; }}</style>"
+                f"{html_paragraphs}</div>"
+            )
 
         # First check inside frames/iframes (TinyMCE editor in Zoho)
         for frame in page.frames:
