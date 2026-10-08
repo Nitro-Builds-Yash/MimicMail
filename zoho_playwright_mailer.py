@@ -364,9 +364,9 @@ class ModernDarkZohoAutomationApp:
         tab_row.pack(fill=tk.X, pady=(6, 2))
         ttk.Label(tab_row, text="⚡ Parallel Background Tabs:", style="Dark.TLabel").pack(side=tk.LEFT)
         self.tabs_var = tk.IntVar(value=1)
-        self.tabs_spin = ttk.Spinbox(tab_row, from_=1, to=5, textvariable=self.tabs_var, width=5, state="readonly")
+        self.tabs_spin = ttk.Spinbox(tab_row, from_=1, to=10, textvariable=self.tabs_var, width=5, state="readonly")
         self.tabs_spin.pack(side=tk.RIGHT)
-        ttk.Label(pacing_box, text="(Dispatches across multiple tabs simultaneously)", style="DarkMuted.TLabel").pack(anchor=tk.W)
+        ttk.Label(pacing_box, text="(Dispatches across multiple tabs simultaneously, 1 to 10)", style="DarkMuted.TLabel").pack(anchor=tk.W)
 
         # Section: LIVE STATUS & GRAPH
         status_card = ttk.LabelFrame(right_col, text="  4. Delivery Status & Graph  ", style="DarkCard.TLabelframe", padding="14")
