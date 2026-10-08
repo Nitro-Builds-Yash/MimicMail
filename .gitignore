@@ -17,6 +17,7 @@ build/
 # Application Runtime & Session Artifacts
 *.log
 zoho_browser_profile/
+zoho_browser_profiles/
 
 # Data Files & Spreadsheets (Keep examples tracked, ignore production data)
 *.xlsx

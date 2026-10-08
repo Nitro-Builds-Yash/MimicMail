@@ -51,14 +51,31 @@ SAMPLE_HTML_TEMPLATES = [
 <p>Best regards,<br>Outreach Operations Team<br>partners@mimicmail.com</p>"""
 ]
 
-PROFILE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zoho_browser_profile")
+DEFAULT_PROFILE_NAME = "Instance 1 (Primary)"
+AVAILABLE_INSTANCES = [f"Instance {i}" for i in range(1, 11)]
+
+PROFILE_BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zoho_browser_profiles")
+os.makedirs(PROFILE_BASE_DIR, exist_ok=True)
+
+# Compatibility pointer for legacy default profile
+LEGACY_PROFILE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zoho_browser_profile")
+
+def get_instance_profile_dir(instance_name: str) -> str:
+    safe_slug = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in instance_name.strip()).lower()
+    if not safe_slug:
+        safe_slug = "instance_1"
+    # If using instance 1 and old profile exists, preserve cookies from legacy folder
+    target_dir = os.path.join(PROFILE_BASE_DIR, safe_slug)
+    os.makedirs(target_dir, exist_ok=True)
+    return target_dir
 
 class ModernDarkZohoAutomationApp:
-    def __init__(self, root: tk.Tk):
+    def __init__(self, root: tk.Tk, initial_instance: str = "Instance 1"):
         self.root = root
-        self.root.title("MimicMail — Zoho Outreach Automation")
-        self.root.geometry("920x920")
-        self.root.minsize(820, 800)
+        self.current_instance = initial_instance
+        self.root.title(f"MimicMail — [{self.current_instance}] Zoho Outreach Automation")
+        self.root.geometry("940x920")
+        self.root.minsize(840, 800)
 
         # State flags
         self.is_running = False
@@ -71,7 +88,6 @@ class ModernDarkZohoAutomationApp:
         self.cmd_queue = queue.Queue()
         self.worker_thread = None
 
-        os.makedirs(PROFILE_DIR, exist_ok=True)
         self._apply_dark_theme()
         self._build_ui()
 
@@ -227,6 +243,21 @@ class ModernDarkZohoAutomationApp:
         setup_card = ttk.LabelFrame(left_col, text="  1. Session & Recipient Registry  ", style="DarkCard.TLabelframe", padding="12")
         setup_card.pack(fill=tk.X, pady=(0, 10))
 
+        # Row 0: Multi-Instance Profile Selector & New Instance Launcher
+        inst_row = ttk.Frame(setup_card, style="Card.TFrame")
+        inst_row.pack(fill=tk.X, pady=(0, 8))
+
+        ttk.Label(inst_row, text="👤 Profile / Instance:", style="Dark.TLabel").pack(side=tk.LEFT)
+        self.instance_var = tk.StringVar(value=self.current_instance)
+        self.instance_combo = ttk.Combobox(inst_row, textvariable=self.instance_var, values=AVAILABLE_INSTANCES, state="readonly", width=14)
+        self.instance_combo.pack(side=tk.LEFT, padx=(6, 10))
+        self.instance_combo.bind("<<ComboboxSelected>>", self._on_instance_changed)
+
+        self.new_window_btn = ttk.Button(inst_row, text="➕ Launch Another Instance", command=self.launch_new_app_instance, style="StandardDark.TButton")
+        self.new_window_btn.pack(side=tk.RIGHT)
+
+        ttk.Label(inst_row, text="(Run multiple accounts side-by-side)", style="DarkMuted.TLabel").pack(side=tk.RIGHT, padx=6)
+
         # Top Button Row: Launch Zoho on left corner, Browse Excel on right corner
         btn_row = ttk.Frame(setup_card, style="Card.TFrame")
         btn_row.pack(fill=tk.X, pady=(0, 6))
@@ -241,7 +272,7 @@ class ModernDarkZohoAutomationApp:
         info_row = ttk.Frame(setup_card, style="Card.TFrame")
         info_row.pack(fill=tk.X)
 
-        self.session_indicator = tk.Label(info_row, text="● Browser: Ready for connection", bg="#ffffff", fg=self.fg_muted, font=("Segoe UI", 9, "bold"))
+        self.session_indicator = tk.Label(info_row, text=f"● Browser [{self.current_instance}]: Ready", bg="#ffffff", fg=self.fg_muted, font=("Segoe UI", 9, "bold"))
         self.session_indicator.pack(side=tk.LEFT)
 
         self.file_label = ttk.Label(info_row, text="📄 No registry loaded (Required: name, email, title)", style="DarkMuted.TLabel")
@@ -503,6 +534,40 @@ class ModernDarkZohoAutomationApp:
             self.log_text.config(state=tk.DISABLED)
         self.root.after(0, _append)
 
+    def _on_instance_changed(self, event=None):
+        new_inst = self.instance_var.get()
+        if new_inst != self.current_instance:
+            if self.is_running:
+                messagebox.showwarning("Instance Busy", "Please stop the active automation before switching profiles in this window.")
+                self.instance_var.set(self.current_instance)
+                return
+            self.current_instance = new_inst
+            self.root.title(f"MimicMail — [{self.current_instance}] Zoho Outreach Automation")
+            self.session_indicator.config(text=f"● Browser [{self.current_instance}]: Ready", fg=self.fg_muted)
+            self.log(f"Switched active profile to: {self.current_instance} (Using isolated cookies & storage)")
+            # If browser was already running, signal worker to reload context
+            self.cmd_queue.put(("SWITCH_PROFILE", self.current_instance))
+
+    def launch_new_app_instance(self):
+        """Spawns an independent, concurrent MimicMail instance in a separate process."""
+        import subprocess
+        # Pick the next unused instance number
+        curr_idx = 1
+        try:
+            curr_idx = int(self.current_instance.replace("Instance", "").strip())
+        except Exception:
+            pass
+        next_inst = f"Instance {(curr_idx % len(AVAILABLE_INSTANCES)) + 1}"
+
+        script_path = os.path.abspath(__file__)
+        python_exe = sys.executable
+        self.log(f"Spawning concurrent process for: {next_inst}...")
+        try:
+            subprocess.Popen([python_exe, script_path, "--instance", next_inst])
+            self.log(f"✓ New concurrent MimicMail process launched for {next_inst}!")
+        except Exception as e:
+            messagebox.showerror("Launch Error", f"Unable to spawn new instance:\n{str(e)}")
+
     def request_open_browser(self):
         self._ensure_worker_started()
         self.cmd_queue.put(("OPEN_BROWSER", None))
@@ -664,22 +729,34 @@ class ModernDarkZohoAutomationApp:
                 if cmd == "QUIT":
                     break
 
+                elif cmd == "SWITCH_PROFILE":
+                    try:
+                        if browser_context:
+                            self.log("Closing browser context for profile switch...")
+                            browser_context.close()
+                            browser_context = None
+                            browser_page = None
+                            self.root.after(0, lambda: self.session_indicator.config(text=f"● Browser [{self.current_instance}]: Ready", fg=self.fg_muted))
+                    except Exception as err:
+                        self.log(f"Profile switch warning: {err}")
+
                 elif cmd == "OPEN_BROWSER":
                     try:
+                        active_profile_dir = get_instance_profile_dir(self.current_instance)
                         if not (browser_context and browser_page and not browser_page.is_closed()):
-                            self.log("Opening persistent Chromium browser...")
-                            self.root.after(0, lambda: self.session_indicator.config(text="● Launching...", fg=self.accent_orange))
+                            self.log(f"Opening persistent Chromium browser for {self.current_instance}...")
+                            self.root.after(0, lambda: self.session_indicator.config(text="● Launching...", fg="#e67e22"))
 
                             browser_context = playwright_instance.chromium.launch_persistent_context(
-                                user_data_dir=PROFILE_DIR,
+                                user_data_dir=active_profile_dir,
                                 headless=False,
                                 args=["--start-maximized"]
                             )
                             browser_page = browser_context.pages[0] if browser_context.pages else browser_context.new_page()
                             browser_page.goto("https://mail.zoho.com")
 
-                            self.log("Browser is open! Log in and leave this window open.")
-                            self.root.after(0, lambda: self.session_indicator.config(text="● Active & Connected", fg=self.accent_red))
+                            self.log(f"Browser for {self.current_instance} is open! Log in and leave this window open.")
+                            self.root.after(0, lambda: self.session_indicator.config(text=f"● Active & Connected [{self.current_instance}]", fg=self.accent_red))
                         else:
                             self.log("Browser already open. Bringing tab to front...")
                             browser_page.bring_to_front()
@@ -689,11 +766,12 @@ class ModernDarkZohoAutomationApp:
 
                 elif cmd == "START_AUTOMATION":
                     try:
+                        active_profile_dir = get_instance_profile_dir(self.current_instance)
                         # 1. Ensure browser is open in this same thread
                         if not (browser_context and browser_page and not browser_page.is_closed()):
-                            self.log("Opening browser session...")
+                            self.log(f"Opening browser session for {self.current_instance}...")
                             browser_context = playwright_instance.chromium.launch_persistent_context(
-                                user_data_dir=PROFILE_DIR,
+                                user_data_dir=active_profile_dir,
                                 headless=False,
                                 args=["--start-maximized"]
                             )
@@ -1109,6 +1187,11 @@ class ModernDarkZohoAutomationApp:
         self.root.destroy()
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="MimicMail — Multi-Instance Zoho Outreach Engine")
+    parser.add_argument("--instance", type=str, default="Instance 1", help="Profile instance identifier (e.g. 'Instance 1', 'Instance 2')")
+    args, unknown = parser.parse_known_args()
+
     root = tk.Tk()
-    app = ModernDarkZohoAutomationApp(root)
+    app = ModernDarkZohoAutomationApp(root, initial_instance=args.instance)
     root.mainloop()
