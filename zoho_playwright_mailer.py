@@ -750,6 +750,15 @@ class ModernDarkZohoAutomationApp:
                 elif cmd == "OPEN_BROWSER":
                     try:
                         active_profile_dir = get_instance_profile_dir(self.current_instance)
+                        # Clean up any stale singleton locks if browser process died uncleanly
+                        for lock_name in ["SingletonLock", "SingletonSocket", "SingletonCookie", "lockfile"]:
+                            lock_path = os.path.join(active_profile_dir, lock_name)
+                            if os.path.exists(lock_path):
+                                try:
+                                    os.remove(lock_path)
+                                except Exception:
+                                    pass
+
                         if not (browser_context and browser_page and not browser_page.is_closed()):
                             self.log(f"Opening persistent Chromium browser for {self.current_instance}...")
                             self.root.after(0, lambda: self.session_indicator.config(text="● Launching...", fg="#e67e22"))
@@ -757,10 +766,15 @@ class ModernDarkZohoAutomationApp:
                             browser_context = playwright_instance.chromium.launch_persistent_context(
                                 user_data_dir=active_profile_dir,
                                 headless=False,
-                                args=["--start-maximized"]
+                                no_viewport=True,
+                                timeout=45000,
+                                args=["--start-maximized", "--disable-blink-features=AutomationControlled"]
                             )
                             browser_page = browser_context.pages[0] if browser_context.pages else browser_context.new_page()
-                            browser_page.goto("https://mail.zoho.com")
+                            try:
+                                browser_page.goto("https://mail.zoho.com", timeout=45000)
+                            except Exception as nav_e:
+                                self.log(f"Navigation warning (will proceed): {nav_e}")
 
                             self.log(f"Browser for {self.current_instance} is open! Log in and leave this window open.")
                             self.root.after(0, lambda: self.session_indicator.config(text=f"● Active & Connected [{self.current_instance}]", fg=self.accent_red))
@@ -768,8 +782,12 @@ class ModernDarkZohoAutomationApp:
                             self.log("Browser already open. Bringing tab to front...")
                             browser_page.bring_to_front()
                     except Exception as err:
-                        self.log(f"Open browser error: {err}")
-                        self.root.after(0, lambda: self.session_indicator.config(text="● Open Error", fg=self.accent_red))
+                        err_msg = str(err)
+                        self.log(f"Open browser error: {err_msg}")
+                        if "ProcessSingleton" in err_msg or "Target page, context or browser has been closed" in err_msg or "locked" in err_msg.lower():
+                            self.log("💡 Tip: A browser window for this instance is already open. Close existing Chromium windows and retry.")
+                        self.root.after(0, lambda: self.session_indicator.config(text="● Open Error (Check Logs)", fg=self.accent_red))
+                        self.root.after(0, lambda m=err_msg: messagebox.showerror("Browser Launch Error", f"Unable to launch browser:\n\n{m[:200]}\n\nIf another browser window is already using this profile, please close it and try again."))
 
                 elif cmd == "START_AUTOMATION":
                     try:
