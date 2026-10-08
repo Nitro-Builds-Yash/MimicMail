@@ -52,7 +52,7 @@ SAMPLE_HTML_TEMPLATES = [
 ]
 
 DEFAULT_PROFILE_NAME = "Instance 1 (Primary)"
-AVAILABLE_INSTANCES = [f"Instance {i}" for i in range(1, 11)]
+AVAILABLE_INSTANCES = ["Instance 1", "Instance 2"]
 
 PROFILE_BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zoho_browser_profiles")
 os.makedirs(PROFILE_BASE_DIR, exist_ok=True)
@@ -253,10 +253,10 @@ class ModernDarkZohoAutomationApp:
         self.instance_combo.pack(side=tk.LEFT, padx=(6, 10))
         self.instance_combo.bind("<<ComboboxSelected>>", self._on_instance_changed)
 
-        self.new_window_btn = ttk.Button(inst_row, text="➕ Launch Another Instance", command=self.launch_new_app_instance, style="StandardDark.TButton")
+        self.new_window_btn = ttk.Button(inst_row, text="➕ Launch 2nd Instance", command=self.launch_new_app_instance, style="StandardDark.TButton")
         self.new_window_btn.pack(side=tk.RIGHT)
 
-        ttk.Label(inst_row, text="(Run multiple accounts side-by-side)", style="DarkMuted.TLabel").pack(side=tk.RIGHT, padx=6)
+        ttk.Label(inst_row, text="(Optimized for Dual Instance Concurrency)", style="DarkMuted.TLabel").pack(side=tk.RIGHT, padx=6)
 
         # Top Button Row: Launch Zoho on left corner, Browse Excel on right corner
         btn_row = ttk.Frame(setup_card, style="Card.TFrame")
@@ -361,14 +361,14 @@ class ModernDarkZohoAutomationApp:
                                             variable=self.jitter_var, style="Dark.TCheckbutton")
         self.jitter_check.pack(anchor=tk.W)
 
-        # Multi-tab concurrency setting
+        # Multi-tab concurrency setting (Optimized for 4GB - 8GB RAM)
         tab_row = ttk.Frame(pacing_box, style="Card.TFrame")
         tab_row.pack(fill=tk.X, pady=(6, 2))
         ttk.Label(tab_row, text="⚡ Parallel Background Tabs:", style="Dark.TLabel").pack(side=tk.LEFT)
         self.tabs_var = tk.IntVar(value=1)
-        self.tabs_spin = ttk.Spinbox(tab_row, from_=1, to=10, textvariable=self.tabs_var, width=5, state="readonly")
+        self.tabs_spin = ttk.Spinbox(tab_row, from_=1, to=2, textvariable=self.tabs_var, width=5, state="readonly")
         self.tabs_spin.pack(side=tk.RIGHT)
-        ttk.Label(pacing_box, text="(Dispatches across multiple tabs simultaneously, 1 to 10)", style="DarkMuted.TLabel").pack(anchor=tk.W)
+        ttk.Label(pacing_box, text="(Hardware-safe concurrency: 1 or 2 tabs)", style="DarkMuted.TLabel").pack(anchor=tk.W)
 
         # Section: LIVE STATUS & GRAPH
         status_card = ttk.LabelFrame(right_col, text="  4. Delivery Status & Graph  ", style="DarkCard.TLabelframe", padding="14")
@@ -560,24 +560,19 @@ class ModernDarkZohoAutomationApp:
             self.cmd_queue.put(("SWITCH_PROFILE", self.current_instance))
 
     def launch_new_app_instance(self):
-        """Spawns an independent, concurrent MimicMail instance in a separate process."""
+        """Spawns the counterpart instance (Instance 1 <-> Instance 2) in a separate concurrent process."""
         import subprocess
-        # Pick the next unused instance number
-        curr_idx = 1
-        try:
-            curr_idx = int(self.current_instance.replace("Instance", "").strip())
-        except Exception:
-            pass
-        next_inst = f"Instance {(curr_idx % len(AVAILABLE_INSTANCES)) + 1}"
+        # Toggle between Instance 1 and Instance 2
+        next_inst = "Instance 2" if self.current_instance == "Instance 1" else "Instance 1"
 
         script_path = os.path.abspath(__file__)
         python_exe = sys.executable
-        self.log(f"Spawning concurrent process for: {next_inst}...")
+        self.log(f"Spawning dual concurrent process for: {next_inst}...")
         try:
             subprocess.Popen([python_exe, script_path, "--instance", next_inst])
-            self.log(f"✓ New concurrent MimicMail process launched for {next_inst}!")
+            self.log(f"✓ Dual concurrent MimicMail window launched for {next_inst}!")
         except Exception as e:
-            messagebox.showerror("Launch Error", f"Unable to spawn new instance:\n{str(e)}")
+            messagebox.showerror("Launch Error", f"Unable to spawn instance:\n{str(e)}")
 
     def request_open_browser(self):
         self._ensure_worker_started()
