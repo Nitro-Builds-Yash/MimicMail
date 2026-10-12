@@ -1154,16 +1154,13 @@ class ModernDarkZohoAutomationApp:
 
         # Convert body (supports raw HTML drops or text) to styled HTML paragraphs strictly enforcing Times New Roman
         if "<p" in body.lower() or "<div" in body.lower() or "<br" in body.lower():
-            # Already HTML formatted: force Times New Roman on container and replace any existing font-family declarations
             clean_body = body
-            # Ensure Times New Roman font container wraps all content
             styled_html = (
                 f"<div style=\"font-family: 'Times New Roman', Times, serif !important; font-size: 12pt; color: #000000; line-height: 1.5;\">"
                 f"<style>body, div, p, span, b, strong {{ font-family: 'Times New Roman', Times, serif !important; }}</style>"
                 f"{clean_body}</div>"
             )
         else:
-            # Plain text converted to styled paragraphs strictly in Times New Roman
             html_paragraphs = "".join([f"<p style=\"margin: 0 0 10px 0; font-family: 'Times New Roman', Times, serif !important; font-size: 12pt;\">{p.strip()}</p>" if p.strip() else "<p><br></p>" for p in body.split("\n\n")])
             styled_html = (
                 f"<div style=\"font-family: 'Times New Roman', Times, serif !important; font-size: 12pt; color: #000000; line-height: 1.5;\">"
@@ -1171,23 +1168,45 @@ class ModernDarkZohoAutomationApp:
                 f"{html_paragraphs}</div>"
             )
 
-        # First check inside frames/iframes (TinyMCE editor in Zoho)
+        # First check inside frames/iframes (TinyMCE / CKEditor in Zoho)
         for frame in page.frames:
             try:
                 body_elem = frame.query_selector("body[contenteditable='true'], body")
                 if body_elem and body_elem.is_visible():
                     body_elem.click()
                     time.sleep(0.2)
-                    # Clear out any pre-existing whitespace / blank lines by pressing Backspace and Home
-                    frame.keyboard.press("Control+Home")
+                    frame.keyboard.press("Control+A")
                     frame.keyboard.press("Backspace")
                     time.sleep(0.1)
 
-                    # Directly insert formatted Times New Roman HTML so no leading spaces occur
-                    frame.evaluate(f"(html) => {{ document.body.innerHTML = html; }}", styled_html)
-                    filled_body = True
-                    self.log("Body successfully rendered into editor iframe in Times New Roman!")
-                    break
+                    # Method A: Use document.execCommand to insert rich HTML cleanly
+                    inserted = frame.evaluate(
+                        """(html) => {
+                            try {
+                                document.body.focus();
+                                const sel = window.getSelection();
+                                const range = document.createRange();
+                                range.selectNodeContents(document.body);
+                                sel.removeAllRanges();
+                                sel.addRange(range);
+                                const success = document.execCommand('insertHTML', false, html);
+                                if (!success || !document.body.innerHTML.trim()) {
+                                    document.body.innerHTML = html;
+                                }
+                                document.body.dispatchEvent(new Event('input', { bubbles: true }));
+                                document.body.dispatchEvent(new Event('change', { bubbles: true }));
+                                return true;
+                            } catch (e) {
+                                document.body.innerHTML = html;
+                                return true;
+                            }
+                        }""",
+                        styled_html
+                    )
+                    if inserted:
+                        filled_body = True
+                        self.log("Body successfully rendered into editor iframe in Times New Roman!")
+                        break
             except Exception:
                 pass
 
@@ -1195,10 +1214,12 @@ class ModernDarkZohoAutomationApp:
             body_selectors = [
                 "div[contenteditable='true'][aria-label*='Message body' i]",
                 "div[contenteditable='true'][aria-label*='body' i]",
+                "div[contenteditable='true'][aria-label*='Mail' i]",
                 "div[contenteditable='true']",
                 "#mailContent",
                 ".zmMailContent",
-                "[data-test-id='mail-compose-body']"
+                "[data-test-id='mail-compose-body']",
+                ".zmComposeBody"
             ]
             for sel in body_selectors:
                 try:
@@ -1206,24 +1227,59 @@ class ModernDarkZohoAutomationApp:
                     if el and el.is_visible():
                         el.click()
                         time.sleep(0.2)
-                        page.keyboard.press("Control+Home")
+                        page.keyboard.press("Control+A")
                         page.keyboard.press("Backspace")
                         time.sleep(0.1)
-                        page.evaluate(f"(selector, html) => {{ const e = document.querySelector(selector); if (e) e.innerHTML = html; }}", sel, styled_html)
-                        filled_body = True
-                        self.log("Body successfully rendered into contenteditable div in Times New Roman!")
-                        break
+
+                        inserted = page.evaluate(
+                            """([selector, html]) => {
+                                const e = document.querySelector(selector);
+                                if (!e) return false;
+                                try {
+                                    e.focus();
+                                    const sel = window.getSelection();
+                                    const range = document.createRange();
+                                    range.selectNodeContents(e);
+                                    sel.removeAllRanges();
+                                    sel.addRange(range);
+                                    const success = document.execCommand('insertHTML', false, html);
+                                    if (!success || !e.innerHTML.trim()) {
+                                        e.innerHTML = html;
+                                    }
+                                    e.dispatchEvent(new Event('input', { bubbles: true }));
+                                    e.dispatchEvent(new Event('change', { bubbles: true }));
+                                    return true;
+                                } catch (err) {
+                                    e.innerHTML = html;
+                                    return true;
+                                }
+                            }""",
+                            [sel, styled_html]
+                        )
+                        if inserted:
+                            filled_body = True
+                            self.log("Body successfully rendered into contenteditable div in Times New Roman!")
+                            break
                 except Exception:
                     pass
 
         if not filled_body:
-            # Fallback typing
-            self.log("Focusing editor via Tab key navigation...")
+            # Fallback typing: Never type raw HTML tags; convert to clean human-readable text
+            self.log("Editor direct injection fallback: Rendering clean text via keyboard...")
+            import re
+            from html import unescape
+            # Convert HTML tags to plain formatted paragraphs
+            clean_text = re.sub(r'(?i)<br\s*/?>', '\n', body)
+            clean_text = re.sub(r'(?i)</(?:p|div|tr|li|h[1-6])>', '\n\n', clean_text)
+            clean_text = re.sub(r'<[^<]+?>', '', clean_text)
+            clean_text = unescape(clean_text)
+            clean_text = re.sub(r'\n{3,}', '\n\n', clean_text).strip()
+
             page.keyboard.press("Tab")
             time.sleep(0.3)
-            page.keyboard.press("Control+Home")
+            page.keyboard.press("Control+A")
             page.keyboard.press("Backspace")
-            page.keyboard.type(body.strip(), delay=5)
+            page.keyboard.type(clean_text, delay=5)
 
         time.sleep(1.5)
 
