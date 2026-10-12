@@ -106,18 +106,18 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     clean_text = clean_to_plain_text(raw_template)
     escaped_template = escape(clean_text)
 
-    # Wrap name and title in explicit bold tags with inline Times New Roman font
+    # Wrap name and title in reinforced bold tags with explicit Times New Roman styling
     name_escaped = escape(r_name)
     title_escaped = escape(r_title)
     email_escaped = escape(r_email)
 
-    bold_name = f"<b style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: bold;\">{name_escaped}</b>"
-    bold_title = f"<b style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: bold;\">{title_escaped}</b>"
+    bold_name = f"<strong style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: 700 !important;\"><b style=\"font-family: 'Times New Roman', Times, serif !important;\">{name_escaped}</b></strong>"
+    bold_title = f"<strong style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: 700 !important;\"><b style=\"font-family: 'Times New Roman', Times, serif !important;\">{title_escaped}</b></strong>"
 
     html_content = escaped_template
-    for ph in ["{name}", "{NAME}"]:
+    for ph in ["{name}", "{NAME}", "{author name}", "{author_name}", "{author}", "{AUTHOR}"]:
         html_content = html_content.replace(ph, bold_name)
-    for ph in ["{title}", "{TITLE}"]:
+    for ph in ["{title}", "{TITLE}", "{designation}", "{role}"]:
         html_content = html_content.replace(ph, bold_title)
     for ph in ["{email}", "{EMAIL}"]:
         html_content = html_content.replace(ph, email_escaped)
@@ -131,11 +131,12 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         p_lines = [l.strip() for l in p.split("\n")]
         p_inner = "<br>".join(p_lines)
         p_tags.append(
-            f"<div style=\"font-family: 'Times New Roman', Times, serif !important; font-size: 12pt; color: #000000; line-height: 1.5; margin-bottom: 12px;\">{p_inner}</div>"
+            f"<p style=\"margin: 0 0 12px 0; font-family: 'Times New Roman', Times, serif !important; font-size: 12pt; color: #000000; line-height: 1.5;\">{p_inner}</p>"
         )
 
     rich_html = (
         f"<div style=\"font-family: 'Times New Roman', Times, serif !important; font-size: 12pt; color: #000000; line-height: 1.5;\">"
+        f"<style>body, div, p, span, strong, b {{ font-family: 'Times New Roman', Times, serif !important; font-size: 12pt; }} strong, b {{ font-weight: 700 !important; }}</style>"
         + "".join(p_tags) +
         "</div>"
     )
@@ -143,7 +144,8 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     # Plain text version for fallback
     plain_text = clean_text
     for ph, val in [("{name}", r_name), ("{title}", r_title), ("{email}", r_email),
-                    ("{NAME}", r_name), ("{TITLE}", r_title), ("{EMAIL}", r_email)]:
+                    ("{NAME}", r_name), ("{TITLE}", r_title), ("{EMAIL}", r_email),
+                    ("{author name}", r_name), ("{author_name}", r_name), ("{author}", r_name)]:
         plain_text = plain_text.replace(ph, val)
 
     return rich_html, plain_text
@@ -1265,10 +1267,11 @@ class ModernDarkZohoAutomationApp:
                         """(html) => {
                             try {
                                 document.body.focus();
-                                document.body.style.fontFamily = "'Times New Roman', Times, serif";
-                                document.body.style.fontSize = "12pt";
-                                document.body.style.color = "#000000";
-                                document.body.style.lineHeight = "1.5";
+                                // Clean any existing styles or attributes that override fonts
+                                document.body.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
+                                document.body.style.setProperty('font-size', '12pt', 'important');
+                                document.body.style.setProperty('color', '#000000', 'important');
+                                document.body.style.setProperty('line-height', '1.5', 'important');
 
                                 const sel = window.getSelection();
                                 const range = document.createRange();
@@ -1276,10 +1279,32 @@ class ModernDarkZohoAutomationApp:
                                 sel.removeAllRanges();
                                 sel.addRange(range);
 
+                                // First try inserting rich HTML
                                 const success = document.execCommand('insertHTML', false, html);
                                 if (!success || !document.body.innerHTML.trim()) {
                                     document.body.innerHTML = html;
                                 }
+
+                                // Apply Times New Roman font via execCommand fontName across the entire body selection
+                                try {
+                                    const allRange = document.createRange();
+                                    allRange.selectNodeContents(document.body);
+                                    sel.removeAllRanges();
+                                    sel.addRange(allRange);
+                                    document.execCommand('fontName', false, 'Times New Roman');
+                                    document.execCommand('fontSize', false, '3'); // standard 12pt
+                                    sel.removeAllRanges();
+                                } catch (fontCmdErr) {}
+
+                                // Enforce font and bold styles on all child elements
+                                document.body.querySelectorAll('*').forEach(el => {
+                                    el.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
+                                    const tag = el.tagName.toLowerCase();
+                                    if (tag === 'b' || tag === 'strong') {
+                                        el.style.setProperty('font-weight', '700', 'important');
+                                    }
+                                });
+
                                 document.body.dispatchEvent(new Event('input', { bubbles: true }));
                                 document.body.dispatchEvent(new Event('change', { bubbles: true }));
                                 return true;
@@ -1324,10 +1349,10 @@ class ModernDarkZohoAutomationApp:
                                 if (!e) return false;
                                 try {
                                     e.focus();
-                                    e.style.fontFamily = "'Times New Roman', Times, serif";
-                                    e.style.fontSize = "12pt";
-                                    e.style.color = "#000000";
-                                    e.style.lineHeight = "1.5";
+                                    e.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
+                                    e.style.setProperty('font-size', '12pt', 'important');
+                                    e.style.setProperty('color', '#000000', 'important');
+                                    e.style.setProperty('line-height', '1.5', 'important');
 
                                     const sel = window.getSelection();
                                     const range = document.createRange();
@@ -1339,6 +1364,27 @@ class ModernDarkZohoAutomationApp:
                                     if (!success || !e.innerHTML.trim()) {
                                         e.innerHTML = html;
                                     }
+
+                                    // Apply fontName across editor selection
+                                    try {
+                                        const allRange = document.createRange();
+                                        allRange.selectNodeContents(e);
+                                        sel.removeAllRanges();
+                                        sel.addRange(allRange);
+                                        document.execCommand('fontName', false, 'Times New Roman');
+                                        document.execCommand('fontSize', false, '3');
+                                        sel.removeAllRanges();
+                                    } catch (fontCmdErr) {}
+
+                                    // Enforce Times New Roman and bolding on all elements
+                                    e.querySelectorAll('*').forEach(child => {
+                                        child.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
+                                        const tag = child.tagName.toLowerCase();
+                                        if (tag === 'b' || tag === 'strong') {
+                                            child.style.setProperty('font-weight', '700', 'important');
+                                        }
+                                    });
+
                                     e.dispatchEvent(new Event('input', { bubbles: true }));
                                     e.dispatchEvent(new Event('change', { bubbles: true }));
                                     return true;
