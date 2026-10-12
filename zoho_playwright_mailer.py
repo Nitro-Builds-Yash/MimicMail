@@ -18,7 +18,7 @@ LOGO_PATH = os.path.join(_BASE_DIR, "assets", "pulsus_logo.png")
 if not os.path.exists(LOGO_PATH):
     LOGO_PATH = os.path.join(_BASE_DIR, "pulsus_logo.png")
 
-# Default user-customizable templates for the 5 slots (Clean, professional text format)
+# Default user-customizable templates for the 3 slots (Clean, professional text format)
 SAMPLE_HTML_TEMPLATES = [
     """Dear {name},
 
@@ -54,31 +54,7 @@ We would appreciate the opportunity to share our upcoming clinical review guidel
 
 Warm regards,
 MimicMail Directorate
-advisory@mimicmail.com""",
-
-    """Dear {name},
-
-I hope you are doing well.
-
-We are reaching out to prominent professionals regarding your initiatives as {title}. We are coordinating multi-center clinical trials and translational research collaborations in your therapeutic domain.
-
-Would you be open to reviewing a brief project abstract?
-
-Best regards,
-Clinical Research Division
-trials@mimicmail.com""",
-
-    """Dear {name},
-
-I hope this message finds you having a wonderful day.
-
-I wanted to connect directly with you regarding your ongoing clinical focus as {title}. Our organization partners with leading medical teams to accelerate knowledge exchange.
-
-Thank you for your valuable time and consideration.
-
-Best regards,
-Outreach Operations Team
-partners@mimicmail.com"""
+advisory@mimicmail.com"""
 ]
 
 def clean_to_plain_text(s: str) -> str:
@@ -111,8 +87,8 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     title_escaped = escape(r_title)
     email_escaped = escape(r_email)
 
-    bold_name = f"<strong class=\"bold-field\" style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: 700 !important; font-size: 12pt; display: inline;\"><b class=\"bold-field\" style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: bold !important; font-size: 12pt;\">{name_escaped}</b></strong>"
-    bold_title = f"<strong class=\"bold-field\" style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: 700 !important; font-size: 12pt; display: inline;\"><b class=\"bold-field\" style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: bold !important; font-size: 12pt;\">{title_escaped}</b></strong>"
+    bold_name = f"<b class=\"bold-field\" style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: bold !important; font-size: 12pt !important;\">{name_escaped}</b>"
+    bold_title = f"<b class=\"bold-field\" style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: bold !important; font-size: 12pt !important;\">{title_escaped}</b>"
 
     html_content = escaped_template
     for ph in ["{name}", "{NAME}", "{author name}", "{author_name}", "{author}", "{AUTHOR}"]:
@@ -122,7 +98,7 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     for ph in ["{email}", "{EMAIL}"]:
         html_content = html_content.replace(ph, email_escaped)
 
-    # Format into natural paragraphs with Times New Roman styling
+    # Format into natural, clean left-aligned paragraphs with Times New Roman styling
     paragraphs = html_content.split("\n\n")
     p_tags = []
     for p in paragraphs:
@@ -131,12 +107,11 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         p_lines = [l.strip() for l in p.split("\n")]
         p_inner = "<br>".join(p_lines)
         p_tags.append(
-            f"<p style=\"margin: 0 0 12px 0; font-family: 'Times New Roman', Times, serif !important; font-size: 12pt; color: #000000; line-height: 1.5;\">{p_inner}</p>"
+            f"<p style=\"margin: 0 0 14px 0; text-align: left !important; font-family: 'Times New Roman', Times, serif !important; font-size: 12pt !important; color: #000000; line-height: 1.5;\">{p_inner}</p>"
         )
 
     rich_html = (
-        f"<div style=\"font-family: 'Times New Roman', Times, serif !important; font-size: 12pt; color: #000000; line-height: 1.5;\">"
-        f"<style>body, div, p, span, strong, b {{ font-family: 'Times New Roman', Times, serif !important; font-size: 12pt; }} strong, b {{ font-weight: 700 !important; }}</style>"
+        f"<div style=\"font-family: 'Times New Roman', Times, serif !important; font-size: 12pt !important; color: #000000; line-height: 1.5; text-align: left !important;\">"
         + "".join(p_tags) +
         "</div>"
     )
@@ -402,7 +377,7 @@ class ModernDarkZohoAutomationApp:
         self.template_notebook.pack(fill=tk.BOTH, expand=True, pady=(2, 0))
 
         self.template_text_widgets = []
-        for i in range(5):
+        for i in range(3):
             tab_frame = ttk.Frame(self.template_notebook, style="Card.TFrame")
             self.template_notebook.add(tab_frame, text=f" Template {i+1} ")
 
@@ -786,7 +761,7 @@ class ModernDarkZohoAutomationApp:
             messagebox.showwarning("Missing Subject", "Please enter a subject line template (e.g. {title}).")
             return
 
-        # Gather all non-empty user templates across the 5 slots
+        # Gather all non-empty user templates across the 3 slots
         active_templates = []
         for i, txt_widget in enumerate(self.template_text_widgets):
             content = txt_widget.get("1.0", tk.END).strip()
@@ -794,7 +769,7 @@ class ModernDarkZohoAutomationApp:
                 active_templates.append(content)
 
         if not active_templates:
-            messagebox.showwarning("No Templates", "Please provide at least 1 template in the 5 slots (paste HTML or load a file).")
+            messagebox.showwarning("No Templates", "Please provide at least 1 template in the 3 slots (paste HTML or load a file).")
             return
 
         self.log(f"Verified {len(active_templates)} active user template(s). Random picker enabled across them.")
@@ -878,6 +853,7 @@ class ModernDarkZohoAutomationApp:
                                 headless=False,
                                 no_viewport=True,
                                 timeout=45000,
+                                permissions=["clipboard-read", "clipboard-write"],
                                 args=["--start-maximized", "--disable-blink-features=AutomationControlled"]
                             )
                             browser_page = browser_context.pages[0] if browser_context.pages else browser_context.new_page()
@@ -908,6 +884,7 @@ class ModernDarkZohoAutomationApp:
                             browser_context = playwright_instance.chromium.launch_persistent_context(
                                 user_data_dir=active_profile_dir,
                                 headless=False,
+                                permissions=["clipboard-read", "clipboard-write"],
                                 args=["--start-maximized"]
                             )
                             browser_page = browser_context.pages[0] if browser_context.pages else browser_context.new_page()
@@ -1266,10 +1243,11 @@ class ModernDarkZohoAutomationApp:
                         """(html) => {
                             try {
                                 document.body.focus();
-                                document.body.style.fontFamily = "'Times New Roman', Times, serif";
-                                document.body.style.fontSize = "12pt";
-                                document.body.style.color = "#000000";
-                                document.body.style.lineHeight = "1.5";
+                                document.body.style.setProperty('text-align', 'left', 'important');
+                                document.body.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
+                                document.body.style.setProperty('font-size', '12pt', 'important');
+                                document.body.style.setProperty('color', '#000000', 'important');
+                                document.body.style.setProperty('line-height', '1.5', 'important');
 
                                 const sel = window.getSelection();
                                 const range = document.createRange();
@@ -1283,12 +1261,15 @@ class ModernDarkZohoAutomationApp:
                                     document.body.innerHTML = html;
                                 }
 
-                                // Direct DOM check to reinforce bold tags
+                                // Direct DOM check to reinforce bold tags and left alignment
+                                document.body.querySelectorAll('*').forEach(el => {
+                                    el.style.setProperty('text-align', 'left', 'important');
+                                });
                                 document.body.querySelectorAll('b, strong, .bold-field').forEach(el => {
-                                    el.style.fontWeight = '900';
                                     el.style.setProperty('font-weight', 'bold', 'important');
                                     el.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                     el.style.setProperty('font-size', '12pt', 'important');
+                                    el.style.setProperty('display', 'inline', 'important');
                                 });
 
                                 document.body.dispatchEvent(new Event('input', { bubbles: true }));
@@ -1335,10 +1316,11 @@ class ModernDarkZohoAutomationApp:
                                 if (!e) return false;
                                 try {
                                     e.focus();
-                                    e.style.fontFamily = "'Times New Roman', Times, serif";
-                                    e.style.fontSize = "12pt";
-                                    e.style.color = "#000000";
-                                    e.style.lineHeight = "1.5";
+                                    e.style.setProperty('text-align', 'left', 'important');
+                                    e.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
+                                    e.style.setProperty('font-size', '12pt', 'important');
+                                    e.style.setProperty('color', '#000000', 'important');
+                                    e.style.setProperty('line-height', '1.5', 'important');
 
                                     const sel = window.getSelection();
                                     const range = document.createRange();
@@ -1351,11 +1333,14 @@ class ModernDarkZohoAutomationApp:
                                         e.innerHTML = html;
                                     }
 
+                                    e.querySelectorAll('*').forEach(child => {
+                                        child.style.setProperty('text-align', 'left', 'important');
+                                    });
                                     e.querySelectorAll('b, strong, .bold-field').forEach(child => {
-                                        child.style.fontWeight = '900';
                                         child.style.setProperty('font-weight', 'bold', 'important');
                                         child.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                         child.style.setProperty('font-size', '12pt', 'important');
+                                        child.style.setProperty('display', 'inline', 'important');
                                     });
 
                                     e.dispatchEvent(new Event('input', { bubbles: true }));
