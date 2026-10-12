@@ -1285,14 +1285,15 @@ class ModernDarkZohoAutomationApp:
                                     document.body.innerHTML = html;
                                 }
 
-                                // Explicitly protect and guarantee bold styling on name, title, and all b/strong tags
+                                // Explicitly enforce Times New Roman font and 12pt size on all elements, protecting bold fields
                                 document.body.querySelectorAll('*').forEach(el => {
                                     const tag = el.tagName.toLowerCase();
                                     el.style.fontFamily = "'Times New Roman', Times, serif";
+                                    el.style.fontSize = "12pt";
                                     if (tag === 'b' || tag === 'strong' || el.classList.contains('bold-field')) {
                                         el.style.fontWeight = 'bold';
                                         el.style.setProperty('font-weight', '700', 'important');
-                                        el.setAttribute('style', "font-family: 'Times New Roman', Times, serif !important; font-weight: 700 !important; font-size: 12pt; display: inline;");
+                                        el.setAttribute('style', "font-family: 'Times New Roman', Times, serif !important; font-weight: 700 !important; font-size: 12pt !important; display: inline;");
                                     }
                                 });
 
@@ -1356,14 +1357,15 @@ class ModernDarkZohoAutomationApp:
                                         e.innerHTML = html;
                                     }
 
-                                    // Explicitly protect and guarantee bold styling on name, title, and all b/strong tags
+                                    // Explicitly enforce Times New Roman font and 12pt size on all elements, protecting bold fields
                                     e.querySelectorAll('*').forEach(child => {
                                         const tag = child.tagName.toLowerCase();
                                         child.style.fontFamily = "'Times New Roman', Times, serif";
+                                        child.style.fontSize = "12pt";
                                         if (tag === 'b' || tag === 'strong' || child.classList.contains('bold-field')) {
                                             child.style.fontWeight = 'bold';
                                             child.style.setProperty('font-weight', '700', 'important');
-                                            child.setAttribute('style', "font-family: 'Times New Roman', Times, serif !important; font-weight: 700 !important; font-size: 12pt; display: inline;");
+                                            child.setAttribute('style', "font-family: 'Times New Roman', Times, serif !important; font-weight: 700 !important; font-size: 12pt !important; display: inline;");
                                         }
                                     });
 
