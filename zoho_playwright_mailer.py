@@ -18,38 +18,82 @@ LOGO_PATH = os.path.join(_BASE_DIR, "assets", "pulsus_logo.png")
 if not os.path.exists(LOGO_PATH):
     LOGO_PATH = os.path.join(_BASE_DIR, "pulsus_logo.png")
 
-# Default user-customizable HTML templates for the 5 slots
+# Default user-customizable templates for the 5 slots (Clean, professional text format)
 SAMPLE_HTML_TEMPLATES = [
-    """<p>Dear {name},</p>
-<p>I hope this email finds you well.</p>
-<p>I am reaching out regarding your esteemed work as {title}. We are connecting clinical leaders and researchers to collaborate on high-impact medical publications and global initiatives.</p>
-<p>We would welcome the opportunity to discuss potential synergies with you.</p>
-<p>Best regards,<br>MimicMail Editorial Board<br>editorial@mimicmail.com</p>""",
+    """Dear {name},
 
-    """<p>Dear {name},</p>
-<p>Greetings.</p>
-<p>Given your notable leadership as {title}, our executive committee cordially invites you to participate as an honored speaker in our upcoming Global Medical Summit.</p>
-<p>Your expertise would provide invaluable perspective to our attending clinicians and researchers.</p>
-<p>Sincerely,<br>Scientific Program Committee<br>conferences@mimicmail.com</p>""",
+I hope this email finds you well.
 
-    """<p>Dear {name},</p>
-<p>I trust you are having a productive week.</p>
-<p>In light of your distinguished track record as {title}, we are pleased to invite you to join our Specialized Advisory &amp; Peer Review Council.</p>
-<p>We would appreciate the opportunity to share our upcoming clinical review guidelines with you.</p>
-<p>Warm regards,<br>MimicMail Directorate<br>advisory@mimicmail.com</p>""",
+I am reaching out regarding your esteemed work as {title}. We are connecting clinical leaders and researchers to collaborate on high-impact medical publications and global initiatives.
 
-    """<p>Dear {name},</p>
-<p>I hope you are doing well.</p>
-<p>We are reaching out to prominent professionals regarding your initiatives as {title}. We are coordinating multi-center clinical trials and translational research collaborations in your therapeutic domain.</p>
-<p>Would you be open to reviewing a brief project abstract?</p>
-<p>Best regards,<br>Clinical Research Division<br>trials@mimicmail.com</p>""",
+We would welcome the opportunity to discuss potential synergies with you.
 
-    """<p>Dear {name},</p>
-<p>I hope this message finds you having a wonderful day.</p>
-<p>I wanted to connect directly with you regarding your ongoing clinical focus as {title}. Our organization partners with leading medical teams to accelerate knowledge exchange.</p>
-<p>Thank you for your valuable time and consideration.</p>
-<p>Best regards,<br>Outreach Operations Team<br>partners@mimicmail.com</p>"""
+Best regards,
+MimicMail Editorial Board
+editorial@mimicmail.com""",
+
+    """Dear {name},
+
+Greetings.
+
+Given your notable leadership as {title}, our executive committee cordially invites you to participate as an honored speaker in our upcoming Global Medical Summit.
+
+Your expertise would provide invaluable perspective to our attending clinicians and researchers.
+
+Sincerely,
+Scientific Program Committee
+conferences@mimicmail.com""",
+
+    """Dear {name},
+
+I trust you are having a productive week.
+
+In light of your distinguished track record as {title}, we are pleased to invite you to join our Specialized Advisory & Peer Review Council.
+
+We would appreciate the opportunity to share our upcoming clinical review guidelines with you.
+
+Warm regards,
+MimicMail Directorate
+advisory@mimicmail.com""",
+
+    """Dear {name},
+
+I hope you are doing well.
+
+We are reaching out to prominent professionals regarding your initiatives as {title}. We are coordinating multi-center clinical trials and translational research collaborations in your therapeutic domain.
+
+Would you be open to reviewing a brief project abstract?
+
+Best regards,
+Clinical Research Division
+trials@mimicmail.com""",
+
+    """Dear {name},
+
+I hope this message finds you having a wonderful day.
+
+I wanted to connect directly with you regarding your ongoing clinical focus as {title}. Our organization partners with leading medical teams to accelerate knowledge exchange.
+
+Thank you for your valuable time and consideration.
+
+Best regards,
+Outreach Operations Team
+partners@mimicmail.com"""
 ]
+
+def clean_to_plain_text(s: str) -> str:
+    """Strips any raw HTML tags, converts line breaks/paragraphs, and returns clean email text."""
+    if not s:
+        return ""
+    import re
+    from html import unescape
+    t = re.sub(r'(?i)<br\s*/?>', '\n', s)
+    t = re.sub(r'(?i)</(?:p|div|tr|li|h[1-6])>', '\n\n', t)
+    t = re.sub(r'(?is)<(?:style|script).*?>.*?</(?:style|script)>', '', t)
+    t = re.sub(r'<[^<]+?>', '', t)
+    t = unescape(t)
+    lines = [re.sub(r'[ \t]+', ' ', line).strip() for line in t.splitlines()]
+    return re.sub(r'\n{3,}', '\n\n', '\n'.join(lines)).strip()
 
 DEFAULT_PROFILE_NAME = "Instance 1 (Primary)"
 AVAILABLE_INSTANCES = ["Instance 1", "Instance 2"]
@@ -296,7 +340,7 @@ class ModernDarkZohoAutomationApp:
         # Notebook tabs for 5 templates
         nb_header = ttk.Frame(tmpl_card, style="Card.TFrame")
         nb_header.pack(fill=tk.X, pady=(2, 4))
-        ttk.Label(nb_header, text="Paste or load HTML templates below (Picks randomly per recipient):", style="DarkMuted.TLabel").pack(side=tk.LEFT)
+        ttk.Label(nb_header, text="Paste or load email message templates below (Picks randomly per recipient):", style="DarkMuted.TLabel").pack(side=tk.LEFT)
         tk.Label(nb_header, text="Times New Roman | Bold {name} & {title}", bg="#fdf2f3", fg=self.accent_red, font=("Segoe UI", 8, "bold"), padx=6, pady=2).pack(side=tk.RIGHT)
 
         self.template_notebook = ttk.Notebook(tmpl_card, style="Dark.TNotebook")
@@ -309,7 +353,7 @@ class ModernDarkZohoAutomationApp:
 
             tb = ttk.Frame(tab_frame, style="Card.TFrame")
             tb.pack(fill=tk.X, pady=(4, 4))
-            ttk.Label(tb, text=f"Slot {i+1} HTML markup:", style="DarkMuted.TLabel").pack(side=tk.LEFT)
+            ttk.Label(tb, text=f"Slot {i+1} message text:", style="DarkMuted.TLabel").pack(side=tk.LEFT)
 
             load_btn = ttk.Button(tb, text=f"📂 Load File", command=lambda idx=i: self._load_template_file(idx), style="StandardDark.TButton")
             load_btn.pack(side=tk.RIGHT)
@@ -963,15 +1007,14 @@ class ModernDarkZohoAutomationApp:
                 for ph, val in [("{title}", r_title), ("{name}", r_name), ("{TITLE}", r_title), ("{NAME}", r_name)]:
                     personalized_subject = personalized_subject.replace(ph, val)
 
-                r_name_bold = f"<b>{r_name}</b>"
-                r_title_bold = f"<b>{r_title}</b>"
-
+                # Keep personalized body 100% clean plain text (no raw HTML tags like <b> or <p>)
                 personalized_body = chosen_body_tmpl
-                for ph, val in [("{name}", r_name_bold), ("{title}", r_title_bold), ("{email}", r_email),
-                                ("{NAME}", r_name_bold), ("{TITLE}", r_title_bold), ("{EMAIL}", r_email)]:
+                for ph, val in [("{name}", r_name), ("{title}", r_title), ("{email}", r_email),
+                                ("{NAME}", r_name), ("{TITLE}", r_title), ("{EMAIL}", r_email)]:
                     personalized_body = personalized_body.replace(ph, val)
 
-                personalized_body = personalized_body.strip()
+                # Ensure clean plain text free of any leftover HTML tags
+                personalized_body = clean_to_plain_text(personalized_body)
 
                 tab_label = f"Tab {tab_idx + 1}" if len(tab_pool) > 1 else "Primary"
                 self.log(f"[{tab_label}] Dispatching ({chunk_start + tab_idx + 1}/{total_in_batch}) to {r_name} <{r_email}>...")
@@ -1149,24 +1192,10 @@ class ModernDarkZohoAutomationApp:
         time.sleep(0.8)
 
         # 4. Locate and fill Message Body in Times New Roman font
-        self.log(f"Inserting body text ({len(body)} characters) in Times New Roman...")
+        # Convert any HTML template to clean email text
+        clean_email_text = clean_to_plain_text(body)
+        self.log(f"Inserting clean email text ({len(clean_email_text)} characters)...")
         filled_body = False
-
-        # Convert body (supports raw HTML drops or text) to styled HTML paragraphs strictly enforcing Times New Roman
-        if "<p" in body.lower() or "<div" in body.lower() or "<br" in body.lower():
-            clean_body = body
-            styled_html = (
-                f"<div style=\"font-family: 'Times New Roman', Times, serif !important; font-size: 12pt; color: #000000; line-height: 1.5;\">"
-                f"<style>body, div, p, span, b, strong {{ font-family: 'Times New Roman', Times, serif !important; }}</style>"
-                f"{clean_body}</div>"
-            )
-        else:
-            html_paragraphs = "".join([f"<p style=\"margin: 0 0 10px 0; font-family: 'Times New Roman', Times, serif !important; font-size: 12pt;\">{p.strip()}</p>" if p.strip() else "<p><br></p>" for p in body.split("\n\n")])
-            styled_html = (
-                f"<div style=\"font-family: 'Times New Roman', Times, serif !important; font-size: 12pt; color: #000000; line-height: 1.5;\">"
-                f"<style>body, div, p, span, b, strong {{ font-family: 'Times New Roman', Times, serif !important; }}</style>"
-                f"{html_paragraphs}</div>"
-            )
 
         # First check inside frames/iframes (TinyMCE / CKEditor in Zoho)
         for frame in page.frames:
@@ -1179,33 +1208,46 @@ class ModernDarkZohoAutomationApp:
                     frame.keyboard.press("Backspace")
                     time.sleep(0.1)
 
-                    # Method A: Use document.execCommand to insert rich HTML cleanly
+                    # Method A: Set clean text content and style with Times New Roman
                     inserted = frame.evaluate(
-                        """(html) => {
+                        """(text) => {
                             try {
                                 document.body.focus();
+                                document.body.style.fontFamily = "'Times New Roman', Times, serif";
+                                document.body.style.fontSize = "12pt";
+                                document.body.style.color = "#000000";
+                                document.body.style.lineHeight = "1.5";
+                                
+                                // Split text into natural paragraphs
+                                const paragraphs = text.split('\\n\\n');
+                                const html = paragraphs.map(p => {
+                                    const lines = p.split('\\n').map(l => l.trim()).join('<br>');
+                                    return `<p style="margin: 0 0 12px 0; font-family: 'Times New Roman', Times, serif; font-size: 12pt;">${lines}</p>`;
+                                }).join('');
+
                                 const sel = window.getSelection();
                                 const range = document.createRange();
                                 range.selectNodeContents(document.body);
                                 sel.removeAllRanges();
                                 sel.addRange(range);
+                                
                                 const success = document.execCommand('insertHTML', false, html);
-                                if (!success || !document.body.innerHTML.trim()) {
-                                    document.body.innerHTML = html;
+                                if (!success || !document.body.innerText.trim()) {
+                                    document.body.innerText = text;
                                 }
                                 document.body.dispatchEvent(new Event('input', { bubbles: true }));
                                 document.body.dispatchEvent(new Event('change', { bubbles: true }));
                                 return true;
                             } catch (e) {
-                                document.body.innerHTML = html;
+                                document.body.innerText = text;
                                 return true;
                             }
                         }""",
-                        styled_html
+                        clean_email_text
                     )
                     if inserted:
                         filled_body = True
-                        self.log("Body successfully rendered into editor iframe in Times New Roman!")
+                        self.log("Clean email text successfully inserted into editor iframe!")
                         break
             except Exception:
                 pass
@@ -1232,54 +1274,61 @@ class ModernDarkZohoAutomationApp:
                         time.sleep(0.1)
 
                         inserted = page.evaluate(
-                            """([selector, html]) => {
+                            """([selector, text]) => {
                                 const e = document.querySelector(selector);
                                 if (!e) return false;
                                 try {
                                     e.focus();
+                                    e.style.fontFamily = "'Times New Roman', Times, serif";
+                                    e.style.fontSize = "12pt";
+                                    e.style.color = "#000000";
+                                    e.style.lineHeight = "1.5";
+
+                                    const paragraphs = text.split('\\n\\n');
+                                    const html = paragraphs.map(p => {
+                                        const lines = p.split('\\n').map(l => l.trim()).join('<br>');
+                                        return `<p style="margin: 0 0 12px 0; font-family: 'Times New Roman', Times, serif; font-size: 12pt;">${lines}</p>`;
+                                    }).join('');
+
                                     const sel = window.getSelection();
                                     const range = document.createRange();
                                     range.selectNodeContents(e);
                                     sel.removeAllRanges();
                                     sel.addRange(range);
+
                                     const success = document.execCommand('insertHTML', false, html);
-                                    if (!success || !e.innerHTML.trim()) {
-                                        e.innerHTML = html;
+                                    if (!success || !e.innerText.trim()) {
+                                        e.innerText = text;
                                     }
                                     e.dispatchEvent(new Event('input', { bubbles: true }));
                                     e.dispatchEvent(new Event('change', { bubbles: true }));
                                     return true;
                                 } catch (err) {
-                                    e.innerHTML = html;
+                                    e.innerText = text;
                                     return true;
                                 }
                             }""",
-                            [sel, styled_html]
+                            [sel, clean_email_text]
                         )
                         if inserted:
                             filled_body = True
-                            self.log("Body successfully rendered into contenteditable div in Times New Roman!")
+                            self.log("Clean email text successfully inserted into compose editor!")
                             break
                 except Exception:
                     pass
 
         if not filled_body:
-            # Fallback typing: Never type raw HTML tags; convert to clean human-readable text
-            self.log("Editor direct injection fallback: Rendering clean text via keyboard...")
-            import re
-            from html import unescape
-            # Convert HTML tags to plain formatted paragraphs
-            clean_text = re.sub(r'(?i)<br\s*/?>', '\n', body)
-            clean_text = re.sub(r'(?i)</(?:p|div|tr|li|h[1-6])>', '\n\n', clean_text)
-            clean_text = re.sub(r'<[^<]+?>', '', clean_text)
-            clean_text = unescape(clean_text)
-            clean_text = re.sub(r'\n{3,}', '\n\n', clean_text).strip()
-
+            # Direct natural keyboard typing fallback (strictly clean text, never raw code)
+            self.log("Editor direct injection fallback: Typing clean email text...")
             page.keyboard.press("Tab")
             time.sleep(0.3)
             page.keyboard.press("Control+A")
             page.keyboard.press("Backspace")
-            page.keyboard.type(clean_text, delay=5)
+            # Type line by line with Shift+Enter / Enter so formatting stays intact
+            for line_idx, line in enumerate(clean_email_text.splitlines()):
+                if line:
+                    page.keyboard.type(line, delay=3)
+                page.keyboard.press("Enter")
 
         time.sleep(1.5)
 
