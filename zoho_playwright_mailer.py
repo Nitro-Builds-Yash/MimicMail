@@ -1251,7 +1251,7 @@ class ModernDarkZohoAutomationApp:
         self.log(f"Inserting formatted email body in Times New Roman with bold name & title...")
         filled_body = False
 
-        # First check inside frames/iframes (TinyMCE / CKEditor in Zoho)
+        # Try rich clipboard paste / insertHTML inside iframe first
         for frame in page.frames:
             try:
                 body_elem = frame.query_selector("body[contenteditable='true'], body")
@@ -1262,12 +1262,10 @@ class ModernDarkZohoAutomationApp:
                     frame.keyboard.press("Backspace")
                     time.sleep(0.1)
 
-                    # Insert formatted Times New Roman HTML with bolded tags
                     inserted = frame.evaluate(
                         """(html) => {
                             try {
                                 document.body.focus();
-                                // Set Times New Roman as the base font on editor body
                                 document.body.style.fontFamily = "'Times New Roman', Times, serif";
                                 document.body.style.fontSize = "12pt";
                                 document.body.style.color = "#000000";
@@ -1279,22 +1277,18 @@ class ModernDarkZohoAutomationApp:
                                 sel.removeAllRanges();
                                 sel.addRange(range);
 
-                                // Insert rich HTML without destructive execCommand('fontName') that strips bolding
-                                const success = document.execCommand('insertHTML', false, html);
-                                if (!success || !document.body.innerHTML.trim()) {
+                                // Try standard insertHTML
+                                let ok = document.execCommand('insertHTML', false, html);
+                                if (!ok || !document.body.innerHTML.trim() || document.body.innerText.trim().length === 0) {
                                     document.body.innerHTML = html;
                                 }
 
-                                // Explicitly enforce Times New Roman font and 12pt size on all elements, protecting bold fields
-                                document.body.querySelectorAll('*').forEach(el => {
-                                    const tag = el.tagName.toLowerCase();
-                                    el.style.fontFamily = "'Times New Roman', Times, serif";
-                                    el.style.fontSize = "12pt";
-                                    if (tag === 'b' || tag === 'strong' || el.classList.contains('bold-field')) {
-                                        el.style.fontWeight = 'bold';
-                                        el.style.setProperty('font-weight', '700', 'important');
-                                        el.setAttribute('style', "font-family: 'Times New Roman', Times, serif !important; font-weight: 700 !important; font-size: 12pt !important; display: inline;");
-                                    }
+                                // Direct DOM check to reinforce bold tags
+                                document.body.querySelectorAll('b, strong, .bold-field').forEach(el => {
+                                    el.style.fontWeight = '900';
+                                    el.style.setProperty('font-weight', 'bold', 'important');
+                                    el.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
+                                    el.style.setProperty('font-size', '12pt', 'important');
                                 });
 
                                 document.body.dispatchEvent(new Event('input', { bubbles: true }));
@@ -1352,21 +1346,16 @@ class ModernDarkZohoAutomationApp:
                                     sel.removeAllRanges();
                                     sel.addRange(range);
 
-                                    const success = document.execCommand('insertHTML', false, html);
-                                    if (!success || !e.innerHTML.trim()) {
+                                    let ok = document.execCommand('insertHTML', false, html);
+                                    if (!ok || !e.innerHTML.trim() || e.innerText.trim().length === 0) {
                                         e.innerHTML = html;
                                     }
 
-                                    // Explicitly enforce Times New Roman font and 12pt size on all elements, protecting bold fields
-                                    e.querySelectorAll('*').forEach(child => {
-                                        const tag = child.tagName.toLowerCase();
-                                        child.style.fontFamily = "'Times New Roman', Times, serif";
-                                        child.style.fontSize = "12pt";
-                                        if (tag === 'b' || tag === 'strong' || child.classList.contains('bold-field')) {
-                                            child.style.fontWeight = 'bold';
-                                            child.style.setProperty('font-weight', '700', 'important');
-                                            child.setAttribute('style', "font-family: 'Times New Roman', Times, serif !important; font-weight: 700 !important; font-size: 12pt !important; display: inline;");
-                                        }
+                                    e.querySelectorAll('b, strong, .bold-field').forEach(child => {
+                                        child.style.fontWeight = '900';
+                                        child.style.setProperty('font-weight', 'bold', 'important');
+                                        child.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
+                                        child.style.setProperty('font-size', '12pt', 'important');
                                     });
 
                                     e.dispatchEvent(new Event('input', { bubbles: true }));
@@ -1387,17 +1376,29 @@ class ModernDarkZohoAutomationApp:
                     pass
 
         if not filled_body:
-            # Direct natural keyboard typing fallback (strictly clean text, never raw code)
-            self.log("Editor direct injection fallback: Typing clean email text...")
-            page.keyboard.press("Tab")
-            time.sleep(0.3)
-            page.keyboard.press("Control+A")
-            page.keyboard.press("Backspace")
-            clean_text_to_type = body_text if body_text else clean_to_plain_text(body_html)
-            for line_idx, line in enumerate(clean_text_to_type.splitlines()):
-                if line:
-                    page.keyboard.type(line, delay=3)
-                page.keyboard.press("Enter")
+            # Fallback: Focus editor and use clipboard paste with HTML format
+            self.log("Using clipboard paste fallback for formatted email...")
+            try:
+                page.keyboard.press("Tab")
+                time.sleep(0.3)
+                page.keyboard.press("Control+A")
+                page.keyboard.press("Backspace")
+                page.evaluate(
+                    """(html) => {
+                        const blob = new Blob([html], { type: 'text/html' });
+                        const textBlob = new Blob([html.replace(/<[^>]+>/g, '')], { type: 'text/plain' });
+                        navigator.clipboard.write([
+                            new ClipboardItem({ 'text/html': blob, 'text/plain': textBlob })
+                        ]).catch(() => {});
+                    }""",
+                    body_html
+                )
+                time.sleep(0.3)
+                page.keyboard.press("Control+v")
+                time.sleep(0.5)
+                filled_body = True
+            except Exception:
+                pass
 
         time.sleep(1.5)
 
