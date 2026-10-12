@@ -95,6 +95,59 @@ def clean_to_plain_text(s: str) -> str:
     lines = [re.sub(r'[ \t]+', ' ', line).strip() for line in t.splitlines()]
     return re.sub(r'\n{3,}', '\n\n', '\n'.join(lines)).strip()
 
+def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, r_email: str):
+    """
+    Builds both:
+    1. Rich HTML strictly rendered in Times New Roman with bolded {name} and {title}.
+    2. Clean plain text fallback.
+    """
+    import re
+    from html import escape
+    clean_text = clean_to_plain_text(raw_template)
+    escaped_template = escape(clean_text)
+
+    # Wrap name and title in explicit bold tags with inline Times New Roman font
+    name_escaped = escape(r_name)
+    title_escaped = escape(r_title)
+    email_escaped = escape(r_email)
+
+    bold_name = f"<b style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: bold;\">{name_escaped}</b>"
+    bold_title = f"<b style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: bold;\">{title_escaped}</b>"
+
+    html_content = escaped_template
+    for ph in ["{name}", "{NAME}"]:
+        html_content = html_content.replace(ph, bold_name)
+    for ph in ["{title}", "{TITLE}"]:
+        html_content = html_content.replace(ph, bold_title)
+    for ph in ["{email}", "{EMAIL}"]:
+        html_content = html_content.replace(ph, email_escaped)
+
+    # Format into natural paragraphs with Times New Roman styling
+    paragraphs = html_content.split("\n\n")
+    p_tags = []
+    for p in paragraphs:
+        if not p.strip():
+            continue
+        p_lines = [l.strip() for l in p.split("\n")]
+        p_inner = "<br>".join(p_lines)
+        p_tags.append(
+            f"<div style=\"font-family: 'Times New Roman', Times, serif !important; font-size: 12pt; color: #000000; line-height: 1.5; margin-bottom: 12px;\">{p_inner}</div>"
+        )
+
+    rich_html = (
+        f"<div style=\"font-family: 'Times New Roman', Times, serif !important; font-size: 12pt; color: #000000; line-height: 1.5;\">"
+        + "".join(p_tags) +
+        "</div>"
+    )
+
+    # Plain text version for fallback
+    plain_text = clean_text
+    for ph, val in [("{name}", r_name), ("{title}", r_title), ("{email}", r_email),
+                    ("{NAME}", r_name), ("{TITLE}", r_title), ("{EMAIL}", r_email)]:
+        plain_text = plain_text.replace(ph, val)
+
+    return rich_html, plain_text
+
 DEFAULT_PROFILE_NAME = "Instance 1 (Primary)"
 AVAILABLE_INSTANCES = ["Instance 1", "Instance 2"]
 
@@ -1007,20 +1060,19 @@ class ModernDarkZohoAutomationApp:
                 for ph, val in [("{title}", r_title), ("{name}", r_name), ("{TITLE}", r_title), ("{NAME}", r_name)]:
                     personalized_subject = personalized_subject.replace(ph, val)
 
-                # Keep personalized body 100% clean plain text (no raw HTML tags like <b> or <p>)
-                personalized_body = chosen_body_tmpl
-                for ph, val in [("{name}", r_name), ("{title}", r_title), ("{email}", r_email),
-                                ("{NAME}", r_name), ("{TITLE}", r_title), ("{EMAIL}", r_email)]:
-                    personalized_body = personalized_body.replace(ph, val)
-
-                # Ensure clean plain text free of any leftover HTML tags
-                personalized_body = clean_to_plain_text(personalized_body)
+                # Generate formatted Times New Roman HTML with bolded {name} and {title}, plus clean plain text fallback
+                rich_body_html, plain_body_text = build_formatted_email_content(
+                    raw_template=chosen_body_tmpl,
+                    r_name=r_name,
+                    r_title=r_title,
+                    r_email=r_email
+                )
 
                 tab_label = f"Tab {tab_idx + 1}" if len(tab_pool) > 1 else "Primary"
                 self.log(f"[{tab_label}] Dispatching ({chunk_start + tab_idx + 1}/{total_in_batch}) to {r_name} <{r_email}>...")
 
                 try:
-                    self._send_in_browser(active_page, r_email, personalized_subject, personalized_body)
+                    self._send_in_browser(active_page, r_email, personalized_subject, rich_body_html, plain_body_text)
                     sent_count += 1
                     self.log(f"SUCCESS [{tab_label}]: Email dispatched to {r_email}.")
                 except Exception as err:
@@ -1073,7 +1125,9 @@ class ModernDarkZohoAutomationApp:
         self.log(f"Batch completed! Total sent: {sent_count}")
         self.root.after(0, lambda s=sent_count: messagebox.showinfo("Done", f"Automation finished!\nTotal sent: {s}"))
 
-    def _send_in_browser(self, page, to_email, subject, body):
+    def _send_in_browser(self, page, to_email, subject, body_html, body_text=None):
+        if body_text is None:
+            body_text = clean_to_plain_text(body_html)
         self.log(f"Opening compose tab for: {to_email}")
 
         # 1. Click Compose / New Mail button (Strictly Mail, avoid Calendar / Reminders / Tasks!)
@@ -1191,10 +1245,8 @@ class ModernDarkZohoAutomationApp:
 
         time.sleep(0.8)
 
-        # 4. Locate and fill Message Body in Times New Roman font
-        # Convert any HTML template to clean email text
-        clean_email_text = clean_to_plain_text(body)
-        self.log(f"Inserting clean email text ({len(clean_email_text)} characters)...")
+        # 4. Locate and fill Message Body strictly formatted in Times New Roman with bolded {name} and {title}
+        self.log(f"Inserting formatted email body in Times New Roman with bold name & title...")
         filled_body = False
 
         # First check inside frames/iframes (TinyMCE / CKEditor in Zoho)
@@ -1208,46 +1260,39 @@ class ModernDarkZohoAutomationApp:
                     frame.keyboard.press("Backspace")
                     time.sleep(0.1)
 
-                    # Method A: Set clean text content and style with Times New Roman
+                    # Insert formatted Times New Roman HTML with bolded tags
                     inserted = frame.evaluate(
-                        """(text) => {
+                        """(html) => {
                             try {
                                 document.body.focus();
                                 document.body.style.fontFamily = "'Times New Roman', Times, serif";
                                 document.body.style.fontSize = "12pt";
                                 document.body.style.color = "#000000";
                                 document.body.style.lineHeight = "1.5";
-                                
-                                // Split text into natural paragraphs
-                                const paragraphs = text.split('\\n\\n');
-                                const html = paragraphs.map(p => {
-                                    const lines = p.split('\\n').map(l => l.trim()).join('<br>');
-                                    return `<p style="margin: 0 0 12px 0; font-family: 'Times New Roman', Times, serif; font-size: 12pt;">${lines}</p>`;
-                                }).join('');
 
                                 const sel = window.getSelection();
                                 const range = document.createRange();
                                 range.selectNodeContents(document.body);
                                 sel.removeAllRanges();
                                 sel.addRange(range);
-                                
+
                                 const success = document.execCommand('insertHTML', false, html);
-                                if (!success || !document.body.innerText.trim()) {
-                                    document.body.innerText = text;
+                                if (!success || !document.body.innerHTML.trim()) {
+                                    document.body.innerHTML = html;
                                 }
                                 document.body.dispatchEvent(new Event('input', { bubbles: true }));
                                 document.body.dispatchEvent(new Event('change', { bubbles: true }));
                                 return true;
                             } catch (e) {
-                                document.body.innerText = text;
+                                document.body.innerHTML = html;
                                 return true;
                             }
                         }""",
-                        clean_email_text
+                        body_html
                     )
                     if inserted:
                         filled_body = True
-                        self.log("Clean email text successfully inserted into editor iframe!")
+                        self.log("Formatted Times New Roman email successfully rendered into editor iframe!")
                         break
             except Exception:
                 pass
@@ -1274,7 +1319,7 @@ class ModernDarkZohoAutomationApp:
                         time.sleep(0.1)
 
                         inserted = page.evaluate(
-                            """([selector, text]) => {
+                            """([selector, html]) => {
                                 const e = document.querySelector(selector);
                                 if (!e) return false;
                                 try {
@@ -1284,12 +1329,6 @@ class ModernDarkZohoAutomationApp:
                                     e.style.color = "#000000";
                                     e.style.lineHeight = "1.5";
 
-                                    const paragraphs = text.split('\\n\\n');
-                                    const html = paragraphs.map(p => {
-                                        const lines = p.split('\\n').map(l => l.trim()).join('<br>');
-                                        return `<p style="margin: 0 0 12px 0; font-family: 'Times New Roman', Times, serif; font-size: 12pt;">${lines}</p>`;
-                                    }).join('');
-
                                     const sel = window.getSelection();
                                     const range = document.createRange();
                                     range.selectNodeContents(e);
@@ -1297,22 +1336,22 @@ class ModernDarkZohoAutomationApp:
                                     sel.addRange(range);
 
                                     const success = document.execCommand('insertHTML', false, html);
-                                    if (!success || !e.innerText.trim()) {
-                                        e.innerText = text;
+                                    if (!success || !e.innerHTML.trim()) {
+                                        e.innerHTML = html;
                                     }
                                     e.dispatchEvent(new Event('input', { bubbles: true }));
                                     e.dispatchEvent(new Event('change', { bubbles: true }));
                                     return true;
                                 } catch (err) {
-                                    e.innerText = text;
+                                    e.innerHTML = html;
                                     return true;
                                 }
                             }""",
-                            [sel, clean_email_text]
+                            [sel, body_html]
                         )
                         if inserted:
                             filled_body = True
-                            self.log("Clean email text successfully inserted into compose editor!")
+                            self.log("Formatted Times New Roman email successfully rendered into compose editor!")
                             break
                 except Exception:
                     pass
@@ -1324,8 +1363,8 @@ class ModernDarkZohoAutomationApp:
             time.sleep(0.3)
             page.keyboard.press("Control+A")
             page.keyboard.press("Backspace")
-            # Type line by line with Shift+Enter / Enter so formatting stays intact
-            for line_idx, line in enumerate(clean_email_text.splitlines()):
+            clean_text_to_type = body_text if body_text else clean_to_plain_text(body_html)
+            for line_idx, line in enumerate(clean_text_to_type.splitlines()):
                 if line:
                     page.keyboard.type(line, delay=3)
                 page.keyboard.press("Enter")
