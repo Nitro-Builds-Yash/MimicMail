@@ -275,7 +275,7 @@ class ModernDarkZohoAutomationApp:
         self.session_indicator = tk.Label(info_row, text=f"● Browser [{self.current_instance}]: Ready", bg="#ffffff", fg=self.fg_muted, font=("Segoe UI", 9, "bold"))
         self.session_indicator.pack(side=tk.LEFT)
 
-        self.file_label = ttk.Label(info_row, text="📄 No registry loaded (Required: name, email, title)", style="DarkMuted.TLabel")
+        self.file_label = ttk.Label(info_row, text="📄 No registry loaded (Required: email, author name, title)", style="DarkMuted.TLabel")
         self.file_label.pack(side=tk.RIGHT)
 
         # Card 2: 5 HTML Template Slots
@@ -598,10 +598,20 @@ class ModernDarkZohoAutomationApp:
                 self.log(f"⚠️ Warning: Selected file '{os.path.basename(path)}' is empty.")
                 return
 
-            # Validation 2: Check required columns
-            req = {"name", "email", "title"}
+            # Validation 2: Check required columns (email, author name, title)
             col_map = {str(c).strip().lower(): c for c in df.columns}
-            missing = req - set(col_map.keys())
+            
+            author_col = next((col_map[k] for k in ["author name", "author_name", "author", "name"] if k in col_map), None)
+            email_col = next((col_map[k] for k in ["email", "email address", "e-mail"] if k in col_map), None)
+            title_col = next((col_map[k] for k in ["title", "designation", "role"] if k in col_map), None)
+
+            missing = []
+            if not email_col:
+                missing.append("email")
+            if not author_col:
+                missing.append("author name")
+            if not title_col:
+                missing.append("title")
 
             if missing:
                 missing_str = ", ".join(f"'{m}'" for m in missing)
@@ -611,16 +621,17 @@ class ModernDarkZohoAutomationApp:
                     f"The Excel file is not formatted correctly!\n\n"
                     f"Missing required columns: {missing_str}\n"
                     f"Columns found in file: {found_str}\n\n"
-                    f"Please make sure your Excel spreadsheet has the header columns:\n"
-                    f"• name (Recipient's name)\n"
-                    f"• email (Recipient's email)\n"
-                    f"• title (Recipient's clinical role or subject)"
+                    f"Please make sure your Excel spreadsheet includes the header columns:\n"
+                    f"• email (Recipient's email address)\n"
+                    f"• author name (Recipient's name or author)\n"
+                    f"• title (Recipient's clinical role or subject)\n\n"
+                    f"Note: No 'Status' column is required; dispatch tracking is handled automatically."
                 )
                 self.log(f"⚠️ Warning: '{os.path.basename(path)}' is missing required columns: {missing_str}")
                 return
 
             # Validation 3: Check for empty essential values
-            name_col = col_map["name"]
+            name_col = author_col
             email_col = col_map["email"]
             empty_emails = df[email_col].isna().sum() + (df[email_col].astype(str).str.strip() == "").sum()
             
@@ -877,11 +888,10 @@ class ModernDarkZohoAutomationApp:
         parallel_tabs = params.get("parallel_tabs", 1)
 
         df = pd.read_excel(excel_path)
-        col_map = {c.strip().lower(): c for c in df.columns}
-
-        name_col = col_map["name"]
-        email_col = col_map["email"]
-        title_col = col_map["title"]
+        col_map = {str(c).strip().lower(): c for c in df.columns}
+        name_col = next((col_map[k] for k in ["author name", "author_name", "author", "name"] if k in col_map), "name")
+        email_col = next((col_map[k] for k in ["email", "email address", "e-mail"] if k in col_map), "email")
+        title_col = next((col_map[k] for k in ["title", "designation", "role"] if k in col_map), "title")
 
         total_records = len(df)
         has_status_col = any(c.strip().lower() == "status" for c in df.columns)

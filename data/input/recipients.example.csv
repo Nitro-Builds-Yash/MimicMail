@@ -1,4 +1,4 @@
-name,email,title
-Example Recipient,recipient@example.com,Example Role
-Dr. Sarah Jenkins,s.jenkins@hospital.org,Chief of Oncology
-Prof. David Lee,d.lee@university.edu,Director of Clinical Research
+email,author name,title
+recipient@example.com,Example Recipient,Example Role
+s.jenkins@hospital.org,Dr. Sarah Jenkins,Chief of Oncology
+d.lee@university.edu,Prof. David Lee,Director of Clinical Research

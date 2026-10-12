@@ -139,13 +139,15 @@ python zoho_playwright_mailer.py
 ---
 
 ## 📋 Registry Column Schema
-Only 3 standard columns are required in your spreadsheet. Your original Excel file remains 100% clean and untouched (no automatic status or timestamp columns are written into your file):
+Only 3 standard columns are required in your spreadsheet (`email`, `author name`, and `title`). Your original Excel file remains 100% clean and untouched (no `Status` or timestamp columns are required or written into your file):
 
 | Column Name | Required | Description | Example |
 |:---|:---:|:---|:---|
-| `name` | **Yes** | Full name of recipient (used for `{name}` in body) | `Dr. Sarah Jenkins` |
 | `email` | **Yes** | Destination email address | `s.jenkins@hospital.org` |
-| `title` | **Yes** | Dynamic title / designation used in subject and body | `Chief of Oncology` |
+| `author name` | **Yes** | Recipient/Author full name (also accepts `name` or `author`) | `Dr. Sarah Jenkins` |
+| `title` | **Yes** | Clinical role or subject used dynamically in template `{title}` | `Chief of Oncology` |
+
+> **Note on Tracking:** You do **not** need to add a `Status` column in your spreadsheet. MimicMail tracks dispatch progress and status dynamically in memory and the interactive UI during your session without touching your original Excel workbook.
 
 ---
 
