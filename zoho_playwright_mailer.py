@@ -111,8 +111,8 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     title_escaped = escape(r_title)
     email_escaped = escape(r_email)
 
-    bold_name = f"<strong style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: 700 !important;\"><b style=\"font-family: 'Times New Roman', Times, serif !important;\">{name_escaped}</b></strong>"
-    bold_title = f"<strong style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: 700 !important;\"><b style=\"font-family: 'Times New Roman', Times, serif !important;\">{title_escaped}</b></strong>"
+    bold_name = f"<strong class=\"bold-field\" style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: 700 !important; font-size: 12pt; display: inline;\"><b class=\"bold-field\" style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: bold !important; font-size: 12pt;\">{name_escaped}</b></strong>"
+    bold_title = f"<strong class=\"bold-field\" style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: 700 !important; font-size: 12pt; display: inline;\"><b class=\"bold-field\" style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: bold !important; font-size: 12pt;\">{title_escaped}</b></strong>"
 
     html_content = escaped_template
     for ph in ["{name}", "{NAME}", "{author name}", "{author_name}", "{author}", "{AUTHOR}"]:
@@ -1267,11 +1267,11 @@ class ModernDarkZohoAutomationApp:
                         """(html) => {
                             try {
                                 document.body.focus();
-                                // Clean any existing styles or attributes that override fonts
-                                document.body.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
-                                document.body.style.setProperty('font-size', '12pt', 'important');
-                                document.body.style.setProperty('color', '#000000', 'important');
-                                document.body.style.setProperty('line-height', '1.5', 'important');
+                                // Set Times New Roman as the base font on editor body
+                                document.body.style.fontFamily = "'Times New Roman', Times, serif";
+                                document.body.style.fontSize = "12pt";
+                                document.body.style.color = "#000000";
+                                document.body.style.lineHeight = "1.5";
 
                                 const sel = window.getSelection();
                                 const range = document.createRange();
@@ -1279,29 +1279,20 @@ class ModernDarkZohoAutomationApp:
                                 sel.removeAllRanges();
                                 sel.addRange(range);
 
-                                // First try inserting rich HTML
+                                // Insert rich HTML without destructive execCommand('fontName') that strips bolding
                                 const success = document.execCommand('insertHTML', false, html);
                                 if (!success || !document.body.innerHTML.trim()) {
                                     document.body.innerHTML = html;
                                 }
 
-                                // Apply Times New Roman font via execCommand fontName across the entire body selection
-                                try {
-                                    const allRange = document.createRange();
-                                    allRange.selectNodeContents(document.body);
-                                    sel.removeAllRanges();
-                                    sel.addRange(allRange);
-                                    document.execCommand('fontName', false, 'Times New Roman');
-                                    document.execCommand('fontSize', false, '3'); // standard 12pt
-                                    sel.removeAllRanges();
-                                } catch (fontCmdErr) {}
-
-                                // Enforce font and bold styles on all child elements
+                                // Explicitly protect and guarantee bold styling on name, title, and all b/strong tags
                                 document.body.querySelectorAll('*').forEach(el => {
-                                    el.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                     const tag = el.tagName.toLowerCase();
-                                    if (tag === 'b' || tag === 'strong') {
+                                    el.style.fontFamily = "'Times New Roman', Times, serif";
+                                    if (tag === 'b' || tag === 'strong' || el.classList.contains('bold-field')) {
+                                        el.style.fontWeight = 'bold';
                                         el.style.setProperty('font-weight', '700', 'important');
+                                        el.setAttribute('style', "font-family: 'Times New Roman', Times, serif !important; font-weight: 700 !important; font-size: 12pt; display: inline;");
                                     }
                                 });
 
@@ -1349,10 +1340,10 @@ class ModernDarkZohoAutomationApp:
                                 if (!e) return false;
                                 try {
                                     e.focus();
-                                    e.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
-                                    e.style.setProperty('font-size', '12pt', 'important');
-                                    e.style.setProperty('color', '#000000', 'important');
-                                    e.style.setProperty('line-height', '1.5', 'important');
+                                    e.style.fontFamily = "'Times New Roman', Times, serif";
+                                    e.style.fontSize = "12pt";
+                                    e.style.color = "#000000";
+                                    e.style.lineHeight = "1.5";
 
                                     const sel = window.getSelection();
                                     const range = document.createRange();
@@ -1365,23 +1356,14 @@ class ModernDarkZohoAutomationApp:
                                         e.innerHTML = html;
                                     }
 
-                                    // Apply fontName across editor selection
-                                    try {
-                                        const allRange = document.createRange();
-                                        allRange.selectNodeContents(e);
-                                        sel.removeAllRanges();
-                                        sel.addRange(allRange);
-                                        document.execCommand('fontName', false, 'Times New Roman');
-                                        document.execCommand('fontSize', false, '3');
-                                        sel.removeAllRanges();
-                                    } catch (fontCmdErr) {}
-
-                                    // Enforce Times New Roman and bolding on all elements
+                                    // Explicitly protect and guarantee bold styling on name, title, and all b/strong tags
                                     e.querySelectorAll('*').forEach(child => {
-                                        child.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                         const tag = child.tagName.toLowerCase();
-                                        if (tag === 'b' || tag === 'strong') {
+                                        child.style.fontFamily = "'Times New Roman', Times, serif";
+                                        if (tag === 'b' || tag === 'strong' || child.classList.contains('bold-field')) {
+                                            child.style.fontWeight = 'bold';
                                             child.style.setProperty('font-weight', '700', 'important');
+                                            child.setAttribute('style', "font-family: 'Times New Roman', Times, serif !important; font-weight: 700 !important; font-size: 12pt; display: inline;");
                                         }
                                     });
 
