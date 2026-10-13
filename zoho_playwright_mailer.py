@@ -138,64 +138,80 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     # 3. Intelligent Paragraph & Spacing Auto-Readjustment:
     # Handles whatever raw text the user provides (double-spaced, single-spaced, irregular indents).
     raw_blocks = [b.strip() for b in re.split(r'\n\s*\n+', html_content) if b.strip()]
-    pre_paragraphs = []
-    closing_started = False
-    closing_accumulator = []
+    salutation_block = []
+    body_blocks = []
+    closing_block = []
+    mode = 'salutation'
 
     for block in raw_blocks:
         b_lines = [l.strip() for l in block.split('\n') if l.strip()]
         if not b_lines:
             continue
 
-        # Split out salutation if attached at start
-        if not closing_started and len(b_lines) > 1 and re.match(r'(?i)^(?:<b[^>]*>)?\s*(?:dear|hello|hi|greetings)\b', b_lines[0]):
-            pre_paragraphs.append([b_lines[0]])
+        # Split salutation if on first line
+        if mode == 'salutation' and re.match(r'(?i)^(?:<b[^>]*>)?\s*(?:dear|hello|hi|greetings)\b', b_lines[0]):
+            salutation_block = [b_lines[0]]
             b_lines = b_lines[1:]
+            mode = 'body'
+            if not b_lines:
+                continue
 
+        # Check if closing/sign-off begins in this block
         closing_idx = -1
-        for idx, line in enumerate(b_lines):
-            if re.search(r'(?i)\b(?:best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)\b', line):
+        for idx, l in enumerate(b_lines):
+            if re.search(r'(?i)\b(?:best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)\b', l):
                 closing_idx = idx
                 break
 
         if closing_idx != -1:
-            closing_started = True
-            body_part = b_lines[:closing_idx]
-            if body_part:
-                pre_paragraphs.append(body_part)
-            closing_accumulator.extend(b_lines[closing_idx:])
-        elif closing_started:
-            # Everything after the sign-off belongs to the sign-off/signature block (single spaced with <br>)
-            closing_accumulator.extend(b_lines)
-        else:
-            pre_paragraphs.append(b_lines)
+            before_closing = b_lines[:closing_idx]
+            after_closing = b_lines[closing_idx:]
+            if before_closing:
+                body_blocks.append(before_closing)
+            closing_block.extend(after_closing)
+            mode = 'closing'
+            continue
 
-    if closing_accumulator:
-        pre_paragraphs.append(closing_accumulator)
-
-    # Break up multiline body paragraphs if each line was a distinct sentence
-    structured_paragraphs = []
-    for p_lines in pre_paragraphs:
-        is_closing = any(re.search(r'(?i)\b(?:best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)\b', l) for l in p_lines)
-        if not is_closing and len(p_lines) > 1 and all(re.search(r'[\.\?!,;]$', l) for l in p_lines):
-            for l in p_lines:
-                structured_paragraphs.append([l])
+        if mode == 'closing':
+            closing_block.extend(b_lines)
         else:
-            structured_paragraphs.append(p_lines)
+            body_blocks.append(b_lines)
+
+    # If the user pasted a single unspaced body block where each line is a thought/sentence, break into distinct paragraphs
+    final_body_blocks = []
+    for bb in body_blocks:
+        if len(body_blocks) == 1 and len(bb) > 1:
+            for line in bb:
+                final_body_blocks.append([line])
+        elif len(bb) > 1 and all(re.search(r'[\.\?!,;]$', l) for l in bb):
+            for line in bb:
+                final_body_blocks.append([line])
+        else:
+            final_body_blocks.append(bb)
 
     p_tags = []
-    for par_lines in structured_paragraphs:
-        if not par_lines:
-            continue
-        p_inner = "<br>\n".join(par_lines)
-        # Check if this paragraph is a greeting or closing
-        is_greeting_or_closing = any(
-            re.search(r'(?i)\b(?:dear|best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)\b', l)
-            for l in par_lines
-        )
-        align_val = "left" if is_greeting_or_closing else "justify"
+
+    # 1. Salutation (always left-aligned with clean bottom margin)
+    if salutation_block:
+        s_inner = "<br>\n".join(salutation_block)
         p_tags.append(
-            f'<p align="{align_val}" style="text-align: {align_val} !important; text-justify: inter-word !important; margin: 0 0 14px 0; padding: 0; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{p_inner}</p>'
+            f'<p align="left" style="text-align: left !important; text-justify: inter-word !important; margin: 0 0 16px 0 !important; padding: 0; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{s_inner}</p>'
+        )
+
+    # 2. Body Paragraphs (strictly justified with inter-word justification)
+    for b_lines in final_body_blocks:
+        if not b_lines:
+            continue
+        b_inner = "<br>\n".join(b_lines)
+        p_tags.append(
+            f'<p align="justify" style="text-align: justify !important; text-justify: inter-word !important; margin: 0 0 16px 0 !important; padding: 0; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{b_inner}</p>'
+        )
+
+    # 3. Closing & Sign-off Block (left-aligned with clear top spacing before Best regards)
+    if closing_block:
+        c_inner = "<br>\n".join(closing_block)
+        p_tags.append(
+            f'<p align="left" style="text-align: left !important; text-justify: inter-word !important; margin: 20px 0 0 0 !important; padding: 0; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{c_inner}</p>'
         )
 
     rich_html = (
@@ -1347,20 +1363,27 @@ class ModernDarkZohoAutomationApp:
 
                                 // Direct DOM check to reinforce bold tags, paragraph margins, and justified body alignment
                                 document.body.querySelectorAll('p').forEach(p => {
-                                    p.style.setProperty('margin', '0 0 14px 0', 'important');
                                     p.style.setProperty('padding', '0', 'important');
                                     p.style.setProperty('line-height', '1.5', 'important');
                                     p.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                     p.style.setProperty('font-size', '12pt', 'important');
                                     const firstLine = (p.innerText || p.textContent || '').trim().split('\n')[0] || '';
-                                    const isSalutationOrClosing = /^(?:dear|best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)/i.test(firstLine);
-                                    if (isSalutationOrClosing) {
+                                    const isSalutation = /^(?:dear|hello|hi|greetings)/i.test(firstLine);
+                                    const isClosing = /^(?:best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)/i.test(firstLine);
+
+                                    if (isClosing) {
                                         p.setAttribute('align', 'left');
                                         p.style.setProperty('text-align', 'left', 'important');
+                                        p.style.setProperty('margin', '20px 0 0 0', 'important');
+                                    } else if (isSalutation) {
+                                        p.setAttribute('align', 'left');
+                                        p.style.setProperty('text-align', 'left', 'important');
+                                        p.style.setProperty('margin', '0 0 16px 0', 'important');
                                     } else {
                                         p.setAttribute('align', 'justify');
                                         p.style.setProperty('text-align', 'justify', 'important');
                                         p.style.setProperty('text-justify', 'inter-word', 'important');
+                                        p.style.setProperty('margin', '0 0 16px 0', 'important');
                                     }
                                 });
                                 document.body.querySelectorAll('b, strong, .bold-field').forEach(el => {
@@ -1433,20 +1456,27 @@ class ModernDarkZohoAutomationApp:
                                     }
 
                                     e.querySelectorAll('p').forEach(p => {
-                                        p.style.setProperty('margin', '0 0 14px 0', 'important');
                                         p.style.setProperty('padding', '0', 'important');
                                         p.style.setProperty('line-height', '1.5', 'important');
                                         p.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                         p.style.setProperty('font-size', '12pt', 'important');
                                         const firstLine = (p.innerText || p.textContent || '').trim().split('\n')[0] || '';
-                                        const isSalutationOrClosing = /^(?:dear|best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)/i.test(firstLine);
-                                        if (isSalutationOrClosing) {
+                                        const isSalutation = /^(?:dear|hello|hi|greetings)/i.test(firstLine);
+                                        const isClosing = /^(?:best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)/i.test(firstLine);
+
+                                        if (isClosing) {
                                             p.setAttribute('align', 'left');
                                             p.style.setProperty('text-align', 'left', 'important');
+                                            p.style.setProperty('margin', '20px 0 0 0', 'important');
+                                        } else if (isSalutation) {
+                                            p.setAttribute('align', 'left');
+                                            p.style.setProperty('text-align', 'left', 'important');
+                                            p.style.setProperty('margin', '0 0 16px 0', 'important');
                                         } else {
                                             p.setAttribute('align', 'justify');
                                             p.style.setProperty('text-align', 'justify', 'important');
                                             p.style.setProperty('text-justify', 'inter-word', 'important');
+                                            p.style.setProperty('margin', '0 0 16px 0', 'important');
                                         }
                                     });
                                     e.querySelectorAll('b, strong, .bold-field').forEach(child => {
