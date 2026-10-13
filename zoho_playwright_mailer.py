@@ -77,7 +77,8 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     """
     Builds both:
     1. Rich HTML strictly rendered in Times New Roman (12pt), perfectly left-aligned,
-       with '{name}', '{title}', 'Dear Dr' / salutations, and 'Best regards' / sign-offs bolded.
+       with auto-readjusted paragraph spacing, with '{name}', '{title}', 'Dear Dr' / salutations,
+       and 'Best regards' / sign-offs bolded.
     2. Clean plain text fallback.
     """
     import re
@@ -112,7 +113,6 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         html_content = html_content.replace(ph, email_escaped)
 
     # Automatically detect and bold salutations: "Dear Dr.", "Dear Dr", "Dear Professor", "Dear Prof.", "Dear"
-    # Matches "Dear Dr.", "Dear Dr", etc. preserving any following text
     def bold_salutation(m):
         txt = m.group(1)
         return f'<b class="bold-field" style="{bold_style}">{txt}</b>'
@@ -135,21 +135,59 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         html_content
     )
 
-    # 3. Format into auto-readjusted clean paragraphs with 100% left-alignment and Times New Roman 12pt
-    raw_paragraphs = [p.strip() for p in html_content.split("\n\n") if p.strip()]
-    p_tags = []
-    for p in raw_paragraphs:
-        # Normalize internal linebreaks within the paragraph
-        lines = [l.strip() for l in p.split("\n") if l.strip()]
-        if not lines:
+    # 3. Intelligent Paragraph & Spacing Auto-Readjustment:
+    # Handles whatever raw text the user provides (double-spaced, single-spaced, irregular indents).
+    raw_blocks = [b.strip() for b in re.split(r'\n\s*\n+', html_content) if b.strip()]
+    structured_paragraphs = []
+
+    for block in raw_blocks:
+        b_lines = [l.strip() for l in block.split('\n') if l.strip()]
+        if not b_lines:
             continue
-        p_inner = "<br>\n".join(lines)
+
+        # Split out salutation if it is attached to following lines
+        if len(b_lines) > 1 and re.match(r'(?i)^(?:<b[^>]*>)?\s*(?:dear|hello|hi|greetings)\b', b_lines[0]):
+            structured_paragraphs.append([b_lines[0]])
+            b_lines = b_lines[1:]
+
+        # Split out sign-off if attached at bottom
+        closing_idx = -1
+        for idx, line in enumerate(b_lines):
+            if re.search(r'(?i)\b(?:best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)\b', line):
+                closing_idx = idx
+                break
+
+        if closing_idx != -1:
+            body_part = b_lines[:closing_idx]
+            closing_part = b_lines[closing_idx:]
+            if body_part:
+                # If each line is an independent sentence (e.g. single-newline pasted text), make each line a distinct paragraph
+                if len(body_part) > 1 and all(re.search(r'[\.\?!,;]$', l) for l in body_part):
+                    for l in body_part:
+                        structured_paragraphs.append([l])
+                else:
+                    structured_paragraphs.append(body_part)
+            if closing_part:
+                structured_paragraphs.append(closing_part)
+        else:
+            # Check if this block is unspaced sentences
+            if len(b_lines) > 1 and all(re.search(r'[\.\?!]$', l) for l in b_lines):
+                for l in b_lines:
+                    structured_paragraphs.append([l])
+            else:
+                structured_paragraphs.append(b_lines)
+
+    p_tags = []
+    for par_lines in structured_paragraphs:
+        if not par_lines:
+            continue
+        p_inner = "<br>\n".join(par_lines)
         p_tags.append(
-            f'<p style="margin: 0 0 14px 0; padding: 0; text-align: left !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{p_inner}</p>'
+            f'<p style="margin: 0 0 16px 0; padding: 0; text-align: left !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.6 !important;">{p_inner}</p>'
         )
 
     rich_html = (
-        f'<div style="font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important; text-align: left !important; margin: 0; padding: 0;">\n'
+        f'<div style="font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.6 !important; text-align: left !important; margin: 0; padding: 0;">\n'
         + "\n".join(p_tags) +
         '\n</div>'
     )
@@ -1278,7 +1316,9 @@ class ModernDarkZohoAutomationApp:
                                 document.body.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                 document.body.style.setProperty('font-size', '12pt', 'important');
                                 document.body.style.setProperty('color', '#000000', 'important');
-                                document.body.style.setProperty('line-height', '1.5', 'important');
+                                document.body.style.setProperty('line-height', '1.6', 'important');
+                                document.body.style.setProperty('margin', '0', 'important');
+                                document.body.style.setProperty('padding', '0', 'important');
 
                                 const sel = window.getSelection();
                                 const range = document.createRange();
@@ -1292,9 +1332,17 @@ class ModernDarkZohoAutomationApp:
                                     document.body.innerHTML = html;
                                 }
 
-                                // Direct DOM check to reinforce bold tags and left alignment
+                                // Direct DOM check to reinforce bold tags, paragraph margins, and left alignment
                                 document.body.querySelectorAll('*').forEach(el => {
                                     el.style.setProperty('text-align', 'left', 'important');
+                                });
+                                document.body.querySelectorAll('p').forEach(p => {
+                                    p.style.setProperty('margin', '0 0 16px 0', 'important');
+                                    p.style.setProperty('padding', '0', 'important');
+                                    p.style.setProperty('line-height', '1.6', 'important');
+                                    p.style.setProperty('text-align', 'left', 'important');
+                                    p.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
+                                    p.style.setProperty('font-size', '12pt', 'important');
                                 });
                                 document.body.querySelectorAll('b, strong, .bold-field').forEach(el => {
                                     el.style.setProperty('font-weight', 'bold', 'important');
@@ -1351,7 +1399,9 @@ class ModernDarkZohoAutomationApp:
                                     e.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                     e.style.setProperty('font-size', '12pt', 'important');
                                     e.style.setProperty('color', '#000000', 'important');
-                                    e.style.setProperty('line-height', '1.5', 'important');
+                                    e.style.setProperty('line-height', '1.6', 'important');
+                                    e.style.setProperty('margin', '0', 'important');
+                                    e.style.setProperty('padding', '0', 'important');
 
                                     const sel = window.getSelection();
                                     const range = document.createRange();
@@ -1366,6 +1416,14 @@ class ModernDarkZohoAutomationApp:
 
                                     e.querySelectorAll('*').forEach(child => {
                                         child.style.setProperty('text-align', 'left', 'important');
+                                    });
+                                    e.querySelectorAll('p').forEach(p => {
+                                        p.style.setProperty('margin', '0 0 16px 0', 'important');
+                                        p.style.setProperty('padding', '0', 'important');
+                                        p.style.setProperty('line-height', '1.6', 'important');
+                                        p.style.setProperty('text-align', 'left', 'important');
+                                        p.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
+                                        p.style.setProperty('font-size', '12pt', 'important');
                                     });
                                     e.querySelectorAll('b, strong, .bold-field').forEach(child => {
                                         child.style.setProperty('font-weight', 'bold', 'important');
