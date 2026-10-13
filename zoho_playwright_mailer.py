@@ -182,12 +182,18 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         if not par_lines:
             continue
         p_inner = "<br>\n".join(par_lines)
+        # Check if this paragraph is a short greeting or closing (which look best left-aligned) or body text (justify)
+        is_greeting_or_closing = any(
+            re.search(r'(?i)\b(?:dear|best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)\b', l)
+            for l in par_lines
+        )
+        align_val = "left" if is_greeting_or_closing else "justify"
         p_tags.append(
-            f'<p style="margin: 0 0 16px 0; padding: 0; text-align: left !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.6 !important;">{p_inner}</p>'
+            f'<p style="margin: 0 0 16px 0; padding: 0; text-align: {align_val} !important; text-justify: inter-word; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.6 !important;">{p_inner}</p>'
         )
 
     rich_html = (
-        f'<div style="font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.6 !important; text-align: left !important; margin: 0; padding: 0;">\n'
+        f'<div style="font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.6 !important; text-align: justify !important; margin: 0; padding: 0;">\n'
         + "\n".join(p_tags) +
         '\n</div>'
     )
@@ -1332,17 +1338,21 @@ class ModernDarkZohoAutomationApp:
                                     document.body.innerHTML = html;
                                 }
 
-                                // Direct DOM check to reinforce bold tags, paragraph margins, and left alignment
-                                document.body.querySelectorAll('*').forEach(el => {
-                                    el.style.setProperty('text-align', 'left', 'important');
-                                });
+                                // Direct DOM check to reinforce bold tags, paragraph margins, and justified body alignment
                                 document.body.querySelectorAll('p').forEach(p => {
                                     p.style.setProperty('margin', '0 0 16px 0', 'important');
                                     p.style.setProperty('padding', '0', 'important');
                                     p.style.setProperty('line-height', '1.6', 'important');
-                                    p.style.setProperty('text-align', 'left', 'important');
                                     p.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                     p.style.setProperty('font-size', '12pt', 'important');
+                                    const text = p.innerText || p.textContent || '';
+                                    const isSalutationOrClosing = /^(?:dear|best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)/i.test(text.trim());
+                                    if (isSalutationOrClosing) {
+                                        p.style.setProperty('text-align', 'left', 'important');
+                                    } else {
+                                        p.style.setProperty('text-align', 'justify', 'important');
+                                        p.style.setProperty('text-justify', 'inter-word', 'important');
+                                    }
                                 });
                                 document.body.querySelectorAll('b, strong, .bold-field').forEach(el => {
                                     el.style.setProperty('font-weight', 'bold', 'important');
@@ -1395,7 +1405,6 @@ class ModernDarkZohoAutomationApp:
                                 if (!e) return false;
                                 try {
                                     e.focus();
-                                    e.style.setProperty('text-align', 'left', 'important');
                                     e.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                     e.style.setProperty('font-size', '12pt', 'important');
                                     e.style.setProperty('color', '#000000', 'important');
@@ -1414,16 +1423,20 @@ class ModernDarkZohoAutomationApp:
                                         e.innerHTML = html;
                                     }
 
-                                    e.querySelectorAll('*').forEach(child => {
-                                        child.style.setProperty('text-align', 'left', 'important');
-                                    });
                                     e.querySelectorAll('p').forEach(p => {
                                         p.style.setProperty('margin', '0 0 16px 0', 'important');
                                         p.style.setProperty('padding', '0', 'important');
                                         p.style.setProperty('line-height', '1.6', 'important');
-                                        p.style.setProperty('text-align', 'left', 'important');
                                         p.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                         p.style.setProperty('font-size', '12pt', 'important');
+                                        const text = p.innerText || p.textContent || '';
+                                        const isSalutationOrClosing = /^(?:dear|best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)/i.test(text.trim());
+                                        if (isSalutationOrClosing) {
+                                            p.style.setProperty('text-align', 'left', 'important');
+                                        } else {
+                                            p.style.setProperty('text-align', 'justify', 'important');
+                                            p.style.setProperty('text-justify', 'inter-word', 'important');
+                                        }
                                     });
                                     e.querySelectorAll('b, strong, .bold-field').forEach(child => {
                                         child.style.setProperty('font-weight', 'bold', 'important');
