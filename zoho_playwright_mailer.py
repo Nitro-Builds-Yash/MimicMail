@@ -182,18 +182,19 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         if not par_lines:
             continue
         p_inner = "<br>\n".join(par_lines)
-        # Check if this paragraph is a short greeting or closing (which look best left-aligned) or body text (justify)
+        # Check if this paragraph is a greeting or closing
         is_greeting_or_closing = any(
             re.search(r'(?i)\b(?:dear|best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)\b', l)
             for l in par_lines
         )
         align_val = "left" if is_greeting_or_closing else "justify"
         p_tags.append(
-            f'<p style="margin: 0 0 16px 0; padding: 0; text-align: {align_val} !important; text-justify: inter-word; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.6 !important;">{p_inner}</p>'
+            f'<p align="{align_val}" style="text-align: {align_val} !important; text-justify: inter-word !important; margin: 0 0 16px 0; padding: 0; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.6 !important;">{p_inner}</p>'
         )
 
     rich_html = (
-        f'<div style="font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.6 !important; text-align: justify !important; margin: 0; padding: 0;">\n'
+        f'<div align="justify" style="font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.6 !important; text-align: justify !important; text-justify: inter-word !important; margin: 0; padding: 0;">\n'
+        + '<style>div, p { text-align: justify !important; text-justify: inter-word !important; } p[align="left"] { text-align: left !important; }</style>\n'
         + "\n".join(p_tags) +
         '\n</div>'
     )
@@ -1345,11 +1346,13 @@ class ModernDarkZohoAutomationApp:
                                     p.style.setProperty('line-height', '1.6', 'important');
                                     p.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                     p.style.setProperty('font-size', '12pt', 'important');
-                                    const text = p.innerText || p.textContent || '';
-                                    const isSalutationOrClosing = /^(?:dear|best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)/i.test(text.trim());
+                                    const firstLine = (p.innerText || p.textContent || '').trim().split('\n')[0] || '';
+                                    const isSalutationOrClosing = /^(?:dear|best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)/i.test(firstLine);
                                     if (isSalutationOrClosing) {
+                                        p.setAttribute('align', 'left');
                                         p.style.setProperty('text-align', 'left', 'important');
                                     } else {
+                                        p.setAttribute('align', 'justify');
                                         p.style.setProperty('text-align', 'justify', 'important');
                                         p.style.setProperty('text-justify', 'inter-word', 'important');
                                     }
@@ -1429,11 +1432,13 @@ class ModernDarkZohoAutomationApp:
                                         p.style.setProperty('line-height', '1.6', 'important');
                                         p.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                         p.style.setProperty('font-size', '12pt', 'important');
-                                        const text = p.innerText || p.textContent || '';
-                                        const isSalutationOrClosing = /^(?:dear|best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)/i.test(text.trim());
+                                        const firstLine = (p.innerText || p.textContent || '').trim().split('\n')[0] || '';
+                                        const isSalutationOrClosing = /^(?:dear|best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)/i.test(firstLine);
                                         if (isSalutationOrClosing) {
+                                            p.setAttribute('align', 'left');
                                             p.style.setProperty('text-align', 'left', 'important');
                                         } else {
+                                            p.setAttribute('align', 'justify');
                                             p.style.setProperty('text-align', 'justify', 'important');
                                             p.style.setProperty('text-justify', 'inter-word', 'important');
                                         }
