@@ -1341,7 +1341,7 @@ class ModernDarkZohoAutomationApp:
                         """(html) => {
                             try {
                                 document.body.focus();
-                                document.body.style.setProperty('text-align', 'left', 'important');
+                                document.body.style.removeProperty('text-align');
                                 document.body.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                 document.body.style.setProperty('font-size', '12pt', 'important');
                                 document.body.style.setProperty('color', '#000000', 'important');
@@ -1361,31 +1361,40 @@ class ModernDarkZohoAutomationApp:
                                     document.body.innerHTML = html;
                                 }
 
-                                // Direct DOM check to reinforce bold tags, paragraph margins, and justified body alignment
-                                document.body.querySelectorAll('p').forEach(p => {
-                                    p.style.setProperty('padding', '0', 'important');
-                                    p.style.setProperty('line-height', '1.5', 'important');
-                                    p.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
-                                    p.style.setProperty('font-size', '12pt', 'important');
-                                    const firstLine = (p.innerText || p.textContent || '').trim().split('\n')[0] || '';
+                                // Apply styling across p, div, and block containers
+                                const blocks = document.body.querySelectorAll('p, div[style*="margin"], .zm_content > div');
+                                const targetElements = blocks.length > 0 ? blocks : document.body.querySelectorAll('p, div');
+                                
+                                targetElements.forEach(el => {
+                                    if (el === document.body) return;
+                                    const text = (el.innerText || el.textContent || '').trim();
+                                    if (!text) return;
+
+                                    el.style.setProperty('padding', '0', 'important');
+                                    el.style.setProperty('line-height', '1.5', 'important');
+                                    el.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
+                                    el.style.setProperty('font-size', '12pt', 'important');
+
+                                    const firstLine = text.split('\\n')[0].trim();
                                     const isSalutation = /^(?:dear|hello|hi|greetings)/i.test(firstLine);
-                                    const isClosing = /^(?:best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)/i.test(firstLine);
+                                    const isClosing = /^(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(firstLine);
 
                                     if (isClosing) {
-                                        p.setAttribute('align', 'left');
-                                        p.style.setProperty('text-align', 'left', 'important');
-                                        p.style.setProperty('margin', '20px 0 0 0', 'important');
+                                        el.setAttribute('align', 'left');
+                                        el.style.setProperty('text-align', 'left', 'important');
+                                        el.style.setProperty('margin', '20px 0 0 0', 'important');
                                     } else if (isSalutation) {
-                                        p.setAttribute('align', 'left');
-                                        p.style.setProperty('text-align', 'left', 'important');
-                                        p.style.setProperty('margin', '0 0 16px 0', 'important');
+                                        el.setAttribute('align', 'left');
+                                        el.style.setProperty('text-align', 'left', 'important');
+                                        el.style.setProperty('margin', '0 0 16px 0', 'important');
                                     } else {
-                                        p.setAttribute('align', 'justify');
-                                        p.style.setProperty('text-align', 'justify', 'important');
-                                        p.style.setProperty('text-justify', 'inter-word', 'important');
-                                        p.style.setProperty('margin', '0 0 16px 0', 'important');
+                                        el.setAttribute('align', 'justify');
+                                        el.style.setProperty('text-align', 'justify', 'important');
+                                        el.style.setProperty('text-justify', 'inter-word', 'important');
+                                        el.style.setProperty('margin', '0 0 16px 0', 'important');
                                     }
                                 });
+
                                 document.body.querySelectorAll('b, strong, .bold-field').forEach(el => {
                                     el.style.setProperty('font-weight', 'bold', 'important');
                                     el.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
@@ -1437,6 +1446,7 @@ class ModernDarkZohoAutomationApp:
                                 if (!e) return false;
                                 try {
                                     e.focus();
+                                    e.style.removeProperty('text-align');
                                     e.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                     e.style.setProperty('font-size', '12pt', 'important');
                                     e.style.setProperty('color', '#000000', 'important');
@@ -1455,14 +1465,22 @@ class ModernDarkZohoAutomationApp:
                                         e.innerHTML = html;
                                     }
 
-                                    e.querySelectorAll('p').forEach(p => {
+                                    const blocks = e.querySelectorAll('p, div[style*="margin"], .zm_content > div');
+                                    const targetElements = blocks.length > 0 ? blocks : e.querySelectorAll('p, div');
+
+                                    targetElements.forEach(p => {
+                                        if (p === e) return;
+                                        const text = (p.innerText || p.textContent || '').trim();
+                                        if (!text) return;
+
                                         p.style.setProperty('padding', '0', 'important');
                                         p.style.setProperty('line-height', '1.5', 'important');
                                         p.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                         p.style.setProperty('font-size', '12pt', 'important');
-                                        const firstLine = (p.innerText || p.textContent || '').trim().split('\n')[0] || '';
+
+                                        const firstLine = text.split('\\n')[0].trim();
                                         const isSalutation = /^(?:dear|hello|hi|greetings)/i.test(firstLine);
-                                        const isClosing = /^(?:best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)/i.test(firstLine);
+                                        const isClosing = /^(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(firstLine);
 
                                         if (isClosing) {
                                             p.setAttribute('align', 'left');
@@ -1479,6 +1497,7 @@ class ModernDarkZohoAutomationApp:
                                             p.style.setProperty('margin', '0 0 16px 0', 'important');
                                         }
                                     });
+
                                     e.querySelectorAll('b, strong, .bold-field').forEach(child => {
                                         child.style.setProperty('font-weight', 'bold', 'important');
                                         child.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
@@ -1524,6 +1543,36 @@ class ModernDarkZohoAutomationApp:
                 time.sleep(0.3)
                 page.keyboard.press("Control+v")
                 time.sleep(0.5)
+
+                # Post-paste styling enforcement across active elements
+                page.evaluate(
+                    """() => {
+                        const containers = document.querySelectorAll("div[contenteditable='true'], body[contenteditable='true']");
+                        containers.forEach(e => {
+                            e.querySelectorAll('p, div').forEach(p => {
+                                const text = (p.innerText || p.textContent || '').trim();
+                                if (!text) return;
+                                const firstLine = text.split('\\n')[0].trim();
+                                const isSalutation = /^(?:dear|hello|hi|greetings)/i.test(firstLine);
+                                const isClosing = /^(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(firstLine);
+                                if (isClosing) {
+                                    p.setAttribute('align', 'left');
+                                    p.style.setProperty('text-align', 'left', 'important');
+                                    p.style.setProperty('margin', '20px 0 0 0', 'important');
+                                } else if (isSalutation) {
+                                    p.setAttribute('align', 'left');
+                                    p.style.setProperty('text-align', 'left', 'important');
+                                    p.style.setProperty('margin', '0 0 16px 0', 'important');
+                                } else {
+                                    p.setAttribute('align', 'justify');
+                                    p.style.setProperty('text-align', 'justify', 'important');
+                                    p.style.setProperty('text-justify', 'inter-word', 'important');
+                                    p.style.setProperty('margin', '0 0 16px 0', 'important');
+                                }
+                            });
+                        });
+                    }"""
+                )
                 filled_body = True
             except Exception:
                 pass
