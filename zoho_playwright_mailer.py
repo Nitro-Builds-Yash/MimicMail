@@ -191,11 +191,11 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
 
     p_tags = []
 
-    # 1. Salutation (always left-aligned with clean bottom margin)
+    # 1. Salutation (always left-aligned with 0 top margin, 16px bottom margin)
     if salutation_block:
         s_inner = "<br>\n".join(salutation_block)
         p_tags.append(
-            f'<p align="left" style="text-align: left !important; text-justify: inter-word !important; margin: 0 0 16px 0 !important; padding: 0; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{s_inner}</p>'
+            f'<p align="left" style="text-align: left !important; margin: 0 0 16px 0 !important; padding: 0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{s_inner}</p>'
         )
 
     # 2. Body Paragraphs (strictly justified with inter-word justification)
@@ -204,22 +204,17 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
             continue
         b_inner = "<br>\n".join(b_lines)
         p_tags.append(
-            f'<p align="justify" style="text-align: justify !important; text-justify: inter-word !important; margin: 0 0 16px 0 !important; padding: 0; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{b_inner}</p>'
+            f'<p align="justify" style="text-align: justify !important; text-justify: inter-word !important; text-align-last: left !important; margin: 0 0 16px 0 !important; padding: 0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{b_inner}</p>'
         )
 
-    # 3. Closing & Sign-off Block (left-aligned with clear top spacing before Best regards)
+    # 3. Closing & Sign-off Block (always left-aligned with a clean top space before Best regards)
     if closing_block:
         c_inner = "<br>\n".join(closing_block)
         p_tags.append(
-            f'<p align="left" style="text-align: left !important; text-justify: inter-word !important; margin: 20px 0 0 0 !important; padding: 0; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{c_inner}</p>'
+            f'<p align="left" style="text-align: left !important; margin: 20px 0 0 0 !important; padding: 0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{c_inner}</p>'
         )
 
-    rich_html = (
-        f'<div align="justify" style="font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important; text-align: justify !important; text-justify: inter-word !important; margin: 0; padding: 0;">\n'
-        + '<style>div, p { text-align: justify !important; text-justify: inter-word !important; } p[align="left"] { text-align: left !important; }</style>\n'
-        + "\n".join(p_tags) +
-        '\n</div>'
-    )
+    rich_html = "\n".join(p_tags)
 
     return rich_html, plain_text
 
@@ -1361,11 +1356,21 @@ class ModernDarkZohoAutomationApp:
                                     document.body.innerHTML = html;
                                 }
 
+                                // Remove any unwanted leading empty elements/br that create blank lines before Dear Dr
+                                while (document.body.firstChild) {
+                                    const fc = document.body.firstChild;
+                                    const tag = (fc.nodeName || '').toLowerCase();
+                                    const txt = (fc.textContent || '').replace(/[\\u200B-\\u200D\\uFEFF\\s]/g, '');
+                                    if (tag === 'br' || (['p', 'div'].includes(tag) && txt === '')) {
+                                        document.body.removeChild(fc);
+                                    } else {
+                                        break;
+                                    }
+                                }
+
                                 // Apply styling across p, div, and block containers
-                                const blocks = document.body.querySelectorAll('p, div[style*="margin"], .zm_content > div');
-                                const targetElements = blocks.length > 0 ? blocks : document.body.querySelectorAll('p, div');
-                                
-                                targetElements.forEach(el => {
+                                const blocks = document.body.querySelectorAll('p, div');
+                                blocks.forEach(el => {
                                     if (el === document.body) return;
                                     const text = (el.innerText || el.textContent || '').trim();
                                     if (!text) return;
@@ -1382,16 +1387,20 @@ class ModernDarkZohoAutomationApp:
                                     if (isClosing) {
                                         el.setAttribute('align', 'left');
                                         el.style.setProperty('text-align', 'left', 'important');
-                                        el.style.setProperty('margin', '20px 0 0 0', 'important');
+                                        el.style.setProperty('margin-top', '22px', 'important');
+                                        el.style.setProperty('margin-bottom', '0', 'important');
                                     } else if (isSalutation) {
                                         el.setAttribute('align', 'left');
                                         el.style.setProperty('text-align', 'left', 'important');
-                                        el.style.setProperty('margin', '0 0 16px 0', 'important');
+                                        el.style.setProperty('margin-top', '0', 'important');
+                                        el.style.setProperty('margin-bottom', '16px', 'important');
                                     } else {
                                         el.setAttribute('align', 'justify');
                                         el.style.setProperty('text-align', 'justify', 'important');
                                         el.style.setProperty('text-justify', 'inter-word', 'important');
-                                        el.style.setProperty('margin', '0 0 16px 0', 'important');
+                                        el.style.setProperty('text-align-last', 'left', 'important');
+                                        el.style.setProperty('margin-top', '0', 'important');
+                                        el.style.setProperty('margin-bottom', '16px', 'important');
                                     }
                                 });
 
@@ -1465,10 +1474,20 @@ class ModernDarkZohoAutomationApp:
                                         e.innerHTML = html;
                                     }
 
-                                    const blocks = e.querySelectorAll('p, div[style*="margin"], .zm_content > div');
-                                    const targetElements = blocks.length > 0 ? blocks : e.querySelectorAll('p, div');
+                                    // Remove any unwanted leading empty elements/br before Dear Dr
+                                    while (e.firstChild) {
+                                        const fc = e.firstChild;
+                                        const tag = (fc.nodeName || '').toLowerCase();
+                                        const txt = (fc.textContent || '').replace(/[\\u200B-\\u200D\\uFEFF\\s]/g, '');
+                                        if (tag === 'br' || (['p', 'div'].includes(tag) && txt === '')) {
+                                            e.removeChild(fc);
+                                        } else {
+                                            break;
+                                        }
+                                    }
 
-                                    targetElements.forEach(p => {
+                                    const blocks = e.querySelectorAll('p, div');
+                                    blocks.forEach(p => {
                                         if (p === e) return;
                                         const text = (p.innerText || p.textContent || '').trim();
                                         if (!text) return;
@@ -1485,16 +1504,20 @@ class ModernDarkZohoAutomationApp:
                                         if (isClosing) {
                                             p.setAttribute('align', 'left');
                                             p.style.setProperty('text-align', 'left', 'important');
-                                            p.style.setProperty('margin', '20px 0 0 0', 'important');
+                                            p.style.setProperty('margin-top', '22px', 'important');
+                                            p.style.setProperty('margin-bottom', '0', 'important');
                                         } else if (isSalutation) {
                                             p.setAttribute('align', 'left');
                                             p.style.setProperty('text-align', 'left', 'important');
-                                            p.style.setProperty('margin', '0 0 16px 0', 'important');
+                                            p.style.setProperty('margin-top', '0', 'important');
+                                            p.style.setProperty('margin-bottom', '16px', 'important');
                                         } else {
                                             p.setAttribute('align', 'justify');
                                             p.style.setProperty('text-align', 'justify', 'important');
                                             p.style.setProperty('text-justify', 'inter-word', 'important');
-                                            p.style.setProperty('margin', '0 0 16px 0', 'important');
+                                            p.style.setProperty('text-align-last', 'left', 'important');
+                                            p.style.setProperty('margin-top', '0', 'important');
+                                            p.style.setProperty('margin-bottom', '16px', 'important');
                                         }
                                     });
 
@@ -1549,6 +1572,16 @@ class ModernDarkZohoAutomationApp:
                     """() => {
                         const containers = document.querySelectorAll("div[contenteditable='true'], body[contenteditable='true']");
                         containers.forEach(e => {
+                            while (e.firstChild) {
+                                const fc = e.firstChild;
+                                const tag = (fc.nodeName || '').toLowerCase();
+                                const txt = (fc.textContent || '').replace(/[\\u200B-\\u200D\\uFEFF\\s]/g, '');
+                                if (tag === 'br' || (['p', 'div'].includes(tag) && txt === '')) {
+                                    e.removeChild(fc);
+                                } else {
+                                    break;
+                                }
+                            }
                             e.querySelectorAll('p, div').forEach(p => {
                                 const text = (p.innerText || p.textContent || '').trim();
                                 if (!text) return;
@@ -1558,16 +1591,20 @@ class ModernDarkZohoAutomationApp:
                                 if (isClosing) {
                                     p.setAttribute('align', 'left');
                                     p.style.setProperty('text-align', 'left', 'important');
-                                    p.style.setProperty('margin', '20px 0 0 0', 'important');
+                                    p.style.setProperty('margin-top', '22px', 'important');
+                                    p.style.setProperty('margin-bottom', '0', 'important');
                                 } else if (isSalutation) {
                                     p.setAttribute('align', 'left');
                                     p.style.setProperty('text-align', 'left', 'important');
-                                    p.style.setProperty('margin', '0 0 16px 0', 'important');
+                                    p.style.setProperty('margin-top', '0', 'important');
+                                    p.style.setProperty('margin-bottom', '16px', 'important');
                                 } else {
                                     p.setAttribute('align', 'justify');
                                     p.style.setProperty('text-align', 'justify', 'important');
                                     p.style.setProperty('text-justify', 'inter-word', 'important');
-                                    p.style.setProperty('margin', '0 0 16px 0', 'important');
+                                    p.style.setProperty('text-align-last', 'left', 'important');
+                                    p.style.setProperty('margin-top', '0', 'important');
+                                    p.style.setProperty('margin-bottom', '16px', 'important');
                                 }
                             });
                         });
