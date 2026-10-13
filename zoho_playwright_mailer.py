@@ -18,43 +18,37 @@ LOGO_PATH = os.path.join(_BASE_DIR, "assets", "pulsus_logo.png")
 if not os.path.exists(LOGO_PATH):
     LOGO_PATH = os.path.join(_BASE_DIR, "pulsus_logo.png")
 
-# Default user-customizable templates for the 3 slots (Clean, professional text format)
+# Default user-customizable templates for the 3 slots (Clean, professional text format matching exact spacing and alignment)
 SAMPLE_HTML_TEMPLATES = [
-    """Dear Dr {name},
+    """Dear [Author's Name],
 
-I hope this email finds you well.
+We are pleased to invite you to share your expertise in the field of cancer research by contributing to our upcoming publication. Your work has significantly impacted the community, and we believe your insights would greatly benefit our readers.
 
-I am reaching out regarding your esteemed work as {title}. We are connecting clinical leaders and researchers to collaborate on high-impact medical publications and global initiatives.
-
-We would welcome the opportunity to discuss potential synergies with you.
+This is a valuable opportunity to showcase your research and connect with peers who are equally passionate about advancing cancer treatment. We look forward to your positive response and your essential contribution to this important endeavor.
 
 Best regards,
 MimicMail Editorial Board
-editorial@mimicmail.com""",
+MimicMail Publishing Directorate""",
 
-    """Dear Dr {name},
+    """Dear [Author's Name],
 
-Greetings.
+On behalf of our editorial committee, we cordially invite you to contribute your esteemed research to our upcoming edition on cutting-edge oncology and clinical therapeutics. Your pioneering findings continue to inspire colleagues worldwide.
 
-Given your notable leadership as {title}, our executive committee cordially invites you to participate as an honored speaker in our upcoming Global Medical Summit.
-
-Your expertise would provide invaluable perspective to our attending clinicians and researchers.
+By presenting your work with us, you will reach a global readership of specialists dedicated to accelerating clinical breakthroughs. We would be deeply honored to include your submission in this milestone release.
 
 Best regards,
-Scientific Program Committee
-conferences@mimicmail.com""",
+MimicMail Editorial Board
+MimicMail Scientific Council""",
 
-    """Dear Dr {name},
+    """Dear [Author's Name],
 
-I trust you are having a productive week.
+We are writing to warmly invite your valuable contribution to our specialized medical issue exploring breakthrough approaches in cancer diagnostics and patient care. Your distinguished record in the discipline makes your perspective particularly vital.
 
-In light of your distinguished track record as {title}, we are pleased to invite you to join our Specialized Advisory & Peer Review Council.
-
-We would appreciate the opportunity to share our upcoming clinical review guidelines with you.
+This publication provides an international stage to highlight your latest discoveries and engage with top researchers across the scientific domain. We sincerely anticipate your participation and look forward to working together.
 
 Best regards,
-MimicMail Directorate
-advisory@mimicmail.com"""
+MimicMail Editorial Board
+Global Oncology Review"""
 ]
 
 def clean_to_plain_text(s: str) -> str:
@@ -87,12 +81,26 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     clean_text = clean_to_plain_text(raw_template)
 
     # 1. Substitute placeholders into plain text
+    name_placeholders = [
+        "[Author's Name]", "[Author Name]", "[Author’s Name]", "[author's name]", "[author name]",
+        "[Name]", "[name]", "[NAME]",
+        "{name}", "{NAME}", "{author name}", "{author_name}", "{author}", "{AUTHOR}"
+    ]
+    title_placeholders = [
+        "[Title]", "[title]", "[TITLE]", "[Designation]", "[designation]",
+        "{title}", "{TITLE}", "{designation}", "{role}"
+    ]
+    email_placeholders = [
+        "[Email]", "[email]", "[EMAIL]", "{email}", "{EMAIL}"
+    ]
+
     plain_text = clean_text
-    for ph, val in [("{name}", r_name), ("{title}", r_title), ("{email}", r_email),
-                    ("{NAME}", r_name), ("{TITLE}", r_title), ("{EMAIL}", r_email),
-                    ("{author name}", r_name), ("{author_name}", r_name), ("{author}", r_name),
-                    ("{AUTHOR}", r_name), ("{designation}", r_title), ("{role}", r_title)]:
-        plain_text = plain_text.replace(ph, val)
+    for ph in name_placeholders:
+        plain_text = plain_text.replace(ph, r_name)
+    for ph in title_placeholders:
+        plain_text = plain_text.replace(ph, r_title)
+    for ph in email_placeholders:
+        plain_text = plain_text.replace(ph, r_email)
 
     # 2. Escape text safely for HTML insertion
     escaped_template = escape(clean_text)
@@ -105,12 +113,12 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     bold_title = f"<b class=\"bold-field\" style=\"{bold_style}\">{title_escaped}</b>"
 
     html_content = escaped_template
-    for ph in ["{name}", "{NAME}", "{author name}", "{author_name}", "{author}", "{AUTHOR}"]:
-        html_content = html_content.replace(ph, bold_name)
-    for ph in ["{title}", "{TITLE}", "{designation}", "{role}"]:
-        html_content = html_content.replace(ph, bold_title)
-    for ph in ["{email}", "{EMAIL}"]:
-        html_content = html_content.replace(ph, email_escaped)
+    for ph in name_placeholders:
+        html_content = html_content.replace(escape(ph), bold_name)
+    for ph in title_placeholders:
+        html_content = html_content.replace(escape(ph), bold_title)
+    for ph in email_placeholders:
+        html_content = html_content.replace(escape(ph), email_escaped)
 
     # Automatically detect and bold salutations: "Dear Dr.", "Dear Dr", "Dear Professor", "Dear Prof.", "Dear"
     def bold_salutation(m):
