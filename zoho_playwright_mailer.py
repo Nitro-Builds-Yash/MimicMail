@@ -20,7 +20,7 @@ if not os.path.exists(LOGO_PATH):
 
 # Default user-customizable templates for the 3 slots (Clean, professional text format)
 SAMPLE_HTML_TEMPLATES = [
-    """Dear {name},
+    """Dear Dr {name},
 
 I hope this email finds you well.
 
@@ -32,7 +32,7 @@ Best regards,
 MimicMail Editorial Board
 editorial@mimicmail.com""",
 
-    """Dear {name},
+    """Dear Dr {name},
 
 Greetings.
 
@@ -40,11 +40,11 @@ Given your notable leadership as {title}, our executive committee cordially invi
 
 Your expertise would provide invaluable perspective to our attending clinicians and researchers.
 
-Sincerely,
+Best regards,
 Scientific Program Committee
 conferences@mimicmail.com""",
 
-    """Dear {name},
+    """Dear Dr {name},
 
 I trust you are having a productive week.
 
@@ -52,13 +52,13 @@ In light of your distinguished track record as {title}, we are pleased to invite
 
 We would appreciate the opportunity to share our upcoming clinical review guidelines with you.
 
-Warm regards,
+Best regards,
 MimicMail Directorate
 advisory@mimicmail.com"""
 ]
 
 def clean_to_plain_text(s: str) -> str:
-    """Strips any raw HTML tags, converts line breaks/paragraphs, and returns clean email text."""
+    """Strips any raw HTML tags, normalizes whitespace and line breaks, and returns clean email text."""
     if not s:
         return ""
     import re
@@ -68,27 +68,40 @@ def clean_to_plain_text(s: str) -> str:
     t = re.sub(r'(?is)<(?:style|script).*?>.*?</(?:style|script)>', '', t)
     t = re.sub(r'<[^<]+?>', '', t)
     t = unescape(t)
+    # Strip trailing/leading whitespace per line, collapse internal multi-spaces
     lines = [re.sub(r'[ \t]+', ' ', line).strip() for line in t.splitlines()]
+    # Normalize multiple blank lines to double newlines
     return re.sub(r'\n{3,}', '\n\n', '\n'.join(lines)).strip()
 
 def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, r_email: str):
     """
     Builds both:
-    1. Rich HTML strictly rendered in Times New Roman with bolded {name} and {title}.
+    1. Rich HTML strictly rendered in Times New Roman (12pt), perfectly left-aligned,
+       with '{name}', '{title}', 'Dear Dr' / salutations, and 'Best regards' / sign-offs bolded.
     2. Clean plain text fallback.
     """
     import re
     from html import escape
-    clean_text = clean_to_plain_text(raw_template)
-    escaped_template = escape(clean_text)
 
-    # Wrap name and title in reinforced bold tags with explicit Times New Roman styling
+    clean_text = clean_to_plain_text(raw_template)
+
+    # 1. Substitute placeholders into plain text
+    plain_text = clean_text
+    for ph, val in [("{name}", r_name), ("{title}", r_title), ("{email}", r_email),
+                    ("{NAME}", r_name), ("{TITLE}", r_title), ("{EMAIL}", r_email),
+                    ("{author name}", r_name), ("{author_name}", r_name), ("{author}", r_name),
+                    ("{AUTHOR}", r_name), ("{designation}", r_title), ("{role}", r_title)]:
+        plain_text = plain_text.replace(ph, val)
+
+    # 2. Escape text safely for HTML insertion
+    escaped_template = escape(clean_text)
     name_escaped = escape(r_name)
     title_escaped = escape(r_title)
     email_escaped = escape(r_email)
 
-    bold_name = f"<b class=\"bold-field\" style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: bold !important; font-size: 12pt !important;\">{name_escaped}</b>"
-    bold_title = f"<b class=\"bold-field\" style=\"font-family: 'Times New Roman', Times, serif !important; font-weight: bold !important; font-size: 12pt !important;\">{title_escaped}</b>"
+    bold_style = "font-family: 'Times New Roman', Times, serif !important; font-weight: bold !important; font-size: 12pt !important;"
+    bold_name = f"<b class=\"bold-field\" style=\"{bold_style}\">{name_escaped}</b>"
+    bold_title = f"<b class=\"bold-field\" style=\"{bold_style}\">{title_escaped}</b>"
 
     html_content = escaped_template
     for ph in ["{name}", "{NAME}", "{author name}", "{author_name}", "{author}", "{AUTHOR}"]:
@@ -98,30 +111,48 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     for ph in ["{email}", "{EMAIL}"]:
         html_content = html_content.replace(ph, email_escaped)
 
-    # Format into natural, clean left-aligned paragraphs with Times New Roman styling
-    paragraphs = html_content.split("\n\n")
+    # Automatically detect and bold salutations: "Dear Dr.", "Dear Dr", "Dear Professor", "Dear Prof.", "Dear"
+    # Matches "Dear Dr.", "Dear Dr", etc. preserving any following text
+    def bold_salutation(m):
+        txt = m.group(1)
+        return f'<b class="bold-field" style="{bold_style}">{txt}</b>'
+
+    html_content = re.sub(
+        r'(?i)\b(Dear\s+(?:Dr\.?|Doctor|Prof\.?|Professor|Mr\.?|Ms\.?|Mrs\.?|))(?=\s|<|\b)',
+        bold_salutation,
+        html_content
+    )
+
+    # Automatically detect and bold complimentary sign-offs:
+    # "Best regards,", "Warm regards,", "Kind regards,", "With regards,", "Regards,", "Sincerely,", "Sincerely yours,"
+    def bold_closing(m):
+        txt = m.group(1)
+        return f'<b class="bold-field" style="{bold_style}">{txt}</b>'
+
+    html_content = re.sub(
+        r'(?i)\b(Best\s+regards|Warm\s+regards|Kind\s+regards|With\s+regards|Regards|Sincerely(?:\s+yours)?)\b',
+        bold_closing,
+        html_content
+    )
+
+    # 3. Format into auto-readjusted clean paragraphs with 100% left-alignment and Times New Roman 12pt
+    raw_paragraphs = [p.strip() for p in html_content.split("\n\n") if p.strip()]
     p_tags = []
-    for p in paragraphs:
-        if not p.strip():
+    for p in raw_paragraphs:
+        # Normalize internal linebreaks within the paragraph
+        lines = [l.strip() for l in p.split("\n") if l.strip()]
+        if not lines:
             continue
-        p_lines = [l.strip() for l in p.split("\n")]
-        p_inner = "<br>".join(p_lines)
+        p_inner = "<br>\n".join(lines)
         p_tags.append(
-            f"<p style=\"margin: 0 0 14px 0; text-align: left !important; font-family: 'Times New Roman', Times, serif !important; font-size: 12pt !important; color: #000000; line-height: 1.5;\">{p_inner}</p>"
+            f'<p style="margin: 0 0 14px 0; padding: 0; text-align: left !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{p_inner}</p>'
         )
 
     rich_html = (
-        f"<div style=\"font-family: 'Times New Roman', Times, serif !important; font-size: 12pt !important; color: #000000; line-height: 1.5; text-align: left !important;\">"
-        + "".join(p_tags) +
-        "</div>"
+        f'<div style="font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important; text-align: left !important; margin: 0; padding: 0;">\n'
+        + "\n".join(p_tags) +
+        '\n</div>'
     )
-
-    # Plain text version for fallback
-    plain_text = clean_text
-    for ph, val in [("{name}", r_name), ("{title}", r_title), ("{email}", r_email),
-                    ("{NAME}", r_name), ("{TITLE}", r_title), ("{EMAIL}", r_email),
-                    ("{author name}", r_name), ("{author_name}", r_name), ("{author}", r_name)]:
-        plain_text = plain_text.replace(ph, val)
 
     return rich_html, plain_text
 
