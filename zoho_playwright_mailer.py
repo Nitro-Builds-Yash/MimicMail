@@ -138,19 +138,20 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     # 3. Intelligent Paragraph & Spacing Auto-Readjustment:
     # Handles whatever raw text the user provides (double-spaced, single-spaced, irregular indents).
     raw_blocks = [b.strip() for b in re.split(r'\n\s*\n+', html_content) if b.strip()]
-    structured_paragraphs = []
+    pre_paragraphs = []
+    closing_started = False
+    closing_accumulator = []
 
     for block in raw_blocks:
         b_lines = [l.strip() for l in block.split('\n') if l.strip()]
         if not b_lines:
             continue
 
-        # Split out salutation if it is attached to following lines
-        if len(b_lines) > 1 and re.match(r'(?i)^(?:<b[^>]*>)?\s*(?:dear|hello|hi|greetings)\b', b_lines[0]):
-            structured_paragraphs.append([b_lines[0]])
+        # Split out salutation if attached at start
+        if not closing_started and len(b_lines) > 1 and re.match(r'(?i)^(?:<b[^>]*>)?\s*(?:dear|hello|hi|greetings)\b', b_lines[0]):
+            pre_paragraphs.append([b_lines[0]])
             b_lines = b_lines[1:]
 
-        # Split out sign-off if attached at bottom
         closing_idx = -1
         for idx, line in enumerate(b_lines):
             if re.search(r'(?i)\b(?:best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)\b', line):
@@ -158,24 +159,29 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
                 break
 
         if closing_idx != -1:
+            closing_started = True
             body_part = b_lines[:closing_idx]
-            closing_part = b_lines[closing_idx:]
             if body_part:
-                # If each line is an independent sentence (e.g. single-newline pasted text), make each line a distinct paragraph
-                if len(body_part) > 1 and all(re.search(r'[\.\?!,;]$', l) for l in body_part):
-                    for l in body_part:
-                        structured_paragraphs.append([l])
-                else:
-                    structured_paragraphs.append(body_part)
-            if closing_part:
-                structured_paragraphs.append(closing_part)
+                pre_paragraphs.append(body_part)
+            closing_accumulator.extend(b_lines[closing_idx:])
+        elif closing_started:
+            # Everything after the sign-off belongs to the sign-off/signature block (single spaced with <br>)
+            closing_accumulator.extend(b_lines)
         else:
-            # Check if this block is unspaced sentences
-            if len(b_lines) > 1 and all(re.search(r'[\.\?!]$', l) for l in b_lines):
-                for l in b_lines:
-                    structured_paragraphs.append([l])
-            else:
-                structured_paragraphs.append(b_lines)
+            pre_paragraphs.append(b_lines)
+
+    if closing_accumulator:
+        pre_paragraphs.append(closing_accumulator)
+
+    # Break up multiline body paragraphs if each line was a distinct sentence
+    structured_paragraphs = []
+    for p_lines in pre_paragraphs:
+        is_closing = any(re.search(r'(?i)\b(?:best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)\b', l) for l in p_lines)
+        if not is_closing and len(p_lines) > 1 and all(re.search(r'[\.\?!,;]$', l) for l in p_lines):
+            for l in p_lines:
+                structured_paragraphs.append([l])
+        else:
+            structured_paragraphs.append(p_lines)
 
     p_tags = []
     for par_lines in structured_paragraphs:
@@ -189,11 +195,11 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         )
         align_val = "left" if is_greeting_or_closing else "justify"
         p_tags.append(
-            f'<p align="{align_val}" style="text-align: {align_val} !important; text-justify: inter-word !important; margin: 0 0 16px 0; padding: 0; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.6 !important;">{p_inner}</p>'
+            f'<p align="{align_val}" style="text-align: {align_val} !important; text-justify: inter-word !important; margin: 0 0 14px 0; padding: 0; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{p_inner}</p>'
         )
 
     rich_html = (
-        f'<div align="justify" style="font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.6 !important; text-align: justify !important; text-justify: inter-word !important; margin: 0; padding: 0;">\n'
+        f'<div align="justify" style="font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important; text-align: justify !important; text-justify: inter-word !important; margin: 0; padding: 0;">\n'
         + '<style>div, p { text-align: justify !important; text-justify: inter-word !important; } p[align="left"] { text-align: left !important; }</style>\n'
         + "\n".join(p_tags) +
         '\n</div>'
@@ -1341,9 +1347,9 @@ class ModernDarkZohoAutomationApp:
 
                                 // Direct DOM check to reinforce bold tags, paragraph margins, and justified body alignment
                                 document.body.querySelectorAll('p').forEach(p => {
-                                    p.style.setProperty('margin', '0 0 16px 0', 'important');
+                                    p.style.setProperty('margin', '0 0 14px 0', 'important');
                                     p.style.setProperty('padding', '0', 'important');
-                                    p.style.setProperty('line-height', '1.6', 'important');
+                                    p.style.setProperty('line-height', '1.5', 'important');
                                     p.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                     p.style.setProperty('font-size', '12pt', 'important');
                                     const firstLine = (p.innerText || p.textContent || '').trim().split('\n')[0] || '';
@@ -1411,7 +1417,7 @@ class ModernDarkZohoAutomationApp:
                                     e.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                     e.style.setProperty('font-size', '12pt', 'important');
                                     e.style.setProperty('color', '#000000', 'important');
-                                    e.style.setProperty('line-height', '1.6', 'important');
+                                    e.style.setProperty('line-height', '1.5', 'important');
                                     e.style.setProperty('margin', '0', 'important');
                                     e.style.setProperty('padding', '0', 'important');
 
@@ -1427,9 +1433,9 @@ class ModernDarkZohoAutomationApp:
                                     }
 
                                     e.querySelectorAll('p').forEach(p => {
-                                        p.style.setProperty('margin', '0 0 16px 0', 'important');
+                                        p.style.setProperty('margin', '0 0 14px 0', 'important');
                                         p.style.setProperty('padding', '0', 'important');
-                                        p.style.setProperty('line-height', '1.6', 'important');
+                                        p.style.setProperty('line-height', '1.5', 'important');
                                         p.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                         p.style.setProperty('font-size', '12pt', 'important');
                                         const firstLine = (p.innerText || p.textContent || '').trim().split('\n')[0] || '';
