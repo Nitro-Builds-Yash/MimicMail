@@ -185,17 +185,19 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         else:
             body_blocks.append(b_lines)
 
-    # If the user pasted a single unspaced body block where each line is a thought/sentence, break into distinct paragraphs
+    # Reconstruct body paragraphs:
+    # If the user separated thoughts by full blank lines, each block is its own paragraph.
+    # Within each paragraph block, lines are combined with a space so word-wrapped text flows naturally without extra vertical line breaks.
+    # If the user gave a single block where all sentences end in punctuation and are separate thoughts, break each line into its own paragraph.
     final_body_blocks = []
     for bb in body_blocks:
-        if len(body_blocks) == 1 and len(bb) > 1:
+        if len(body_blocks) == 1 and len(bb) > 1 and all(len(l) > 20 and re.search(r'[\.\?!,;]$', l) for l in bb):
             for line in bb:
-                final_body_blocks.append([line])
-        elif len(bb) > 1 and all(re.search(r'[\.\?!,;]$', l) for l in bb):
-            for line in bb:
-                final_body_blocks.append([line])
+                final_body_blocks.append(line)
         else:
-            final_body_blocks.append(bb)
+            # Join line-wrapped text within paragraph with space
+            paragraph_text = " ".join(bb)
+            final_body_blocks.append(paragraph_text)
 
     p_tags = []
 
@@ -207,12 +209,11 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         )
 
     # 2. Body Paragraphs (strictly justified with inter-word justification)
-    for b_lines in final_body_blocks:
-        if not b_lines:
+    for b_para in final_body_blocks:
+        if not b_para.strip():
             continue
-        b_inner = "<br>\n".join(b_lines)
         p_tags.append(
-            f'<p align="justify" style="text-align: justify !important; text-justify: inter-word !important; text-align-last: left !important; margin: 0 0 16px 0 !important; padding: 0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{b_inner}</p>'
+            f'<p align="justify" style="text-align: justify !important; text-justify: inter-word !important; text-align-last: left !important; margin: 0 0 16px 0 !important; padding: 0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{b_para.strip()}</p>'
         )
 
     # 3. Closing & Sign-off Block (always left-aligned with a clean top space before Best regards)
@@ -1380,10 +1381,13 @@ class ModernDarkZohoAutomationApp:
                                     }
                                 }
 
-                                // Apply styling across p, div, and block containers
+                                // Apply styling across p, div, and block containers (skip wrapper elements with children)
                                 const blocks = document.body.querySelectorAll('p, div');
                                 blocks.forEach(el => {
                                     if (el === document.body) return;
+                                    // Skip container divs that already hold p or div children to avoid double margin cascading
+                                    if (el.querySelector('p, div')) return;
+
                                     const text = (el.innerText || el.textContent || '').trim();
                                     if (!text) return;
 
@@ -1394,7 +1398,8 @@ class ModernDarkZohoAutomationApp:
 
                                     const firstLine = text.split('\\n')[0].trim();
                                     const isSalutation = /^(?:dear|hello|hi|greetings)/i.test(firstLine);
-                                    const isClosing = /^(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(firstLine);
+                                    const isClosing = /^(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(firstLine) ||
+                                                      /(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(text);
 
                                     if (isClosing) {
                                         el.setAttribute('align', 'left');
@@ -1501,6 +1506,7 @@ class ModernDarkZohoAutomationApp:
                                     const blocks = e.querySelectorAll('p, div');
                                     blocks.forEach(p => {
                                         if (p === e) return;
+                                        if (p.querySelector('p, div')) return;
                                         const text = (p.innerText || p.textContent || '').trim();
                                         if (!text) return;
 
@@ -1511,7 +1517,8 @@ class ModernDarkZohoAutomationApp:
 
                                         const firstLine = text.split('\\n')[0].trim();
                                         const isSalutation = /^(?:dear|hello|hi|greetings)/i.test(firstLine);
-                                        const isClosing = /^(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(firstLine);
+                                        const isClosing = /^(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(firstLine) ||
+                                                          /(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(text);
 
                                         if (isClosing) {
                                             p.setAttribute('align', 'left');
@@ -1595,11 +1602,14 @@ class ModernDarkZohoAutomationApp:
                                 }
                             }
                             e.querySelectorAll('p, div').forEach(p => {
+                                if (p === e) return;
+                                if (p.querySelector('p, div')) return;
                                 const text = (p.innerText || p.textContent || '').trim();
                                 if (!text) return;
                                 const firstLine = text.split('\\n')[0].trim();
                                 const isSalutation = /^(?:dear|hello|hi|greetings)/i.test(firstLine);
-                                const isClosing = /^(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(firstLine);
+                                const isClosing = /^(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(firstLine) ||
+                                                  /(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(text);
                                 if (isClosing) {
                                     p.setAttribute('align', 'left');
                                     p.style.setProperty('text-align', 'left', 'important');
