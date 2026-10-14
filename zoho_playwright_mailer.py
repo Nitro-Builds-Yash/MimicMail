@@ -223,7 +223,11 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
             f'<p align="left" style="text-align: left !important; margin: 20px 0 0 0 !important; padding: 0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{c_inner}</p>'
         )
 
-    rich_html = "\n".join(p_tags)
+    rich_html = (
+        '<div style="font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important; margin: 0; padding: 0;">\n'
+        + "\n".join(p_tags) +
+        '\n</div>'
+    )
 
     return rich_html, plain_text
 
@@ -1421,6 +1425,14 @@ class ModernDarkZohoAutomationApp:
                                     }
                                 });
 
+                                // Enforce Times New Roman font and size across ALL elements inside the body
+                                document.body.querySelectorAll('*').forEach(node => {
+                                    node.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
+                                    if (node.tagName && ['B', 'STRONG', 'SPAN', 'P', 'DIV', 'A', 'FONT'].includes(node.tagName)) {
+                                        node.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
+                                    }
+                                });
+
                                 document.body.querySelectorAll('b, strong, .bold-field').forEach(el => {
                                     el.style.setProperty('font-weight', 'bold', 'important');
                                     el.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
@@ -1540,6 +1552,14 @@ class ModernDarkZohoAutomationApp:
                                         }
                                     });
 
+                                    // Enforce Times New Roman font and size across ALL elements
+                                    e.querySelectorAll('*').forEach(node => {
+                                        node.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
+                                        if (node.tagName && ['B', 'STRONG', 'SPAN', 'P', 'DIV', 'A', 'FONT'].includes(node.tagName)) {
+                                            node.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
+                                        }
+                                    });
+
                                     e.querySelectorAll('b, strong, .bold-field').forEach(child => {
                                         child.style.setProperty('font-weight', 'bold', 'important');
                                         child.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
@@ -1628,6 +1648,9 @@ class ModernDarkZohoAutomationApp:
                                     p.style.setProperty('margin-top', '0', 'important');
                                     p.style.setProperty('margin-bottom', '16px', 'important');
                                 }
+                            });
+                            e.querySelectorAll('*').forEach(node => {
+                                node.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                             });
                         });
                     }"""
