@@ -186,14 +186,19 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
             body_blocks.append(b_lines)
 
     # Reconstruct body paragraphs:
-    # If the user separated thoughts by full blank lines, each block is its own paragraph.
-    # Within each paragraph block, lines are combined with a space so word-wrapped text flows naturally without extra vertical line breaks.
-    # If the user gave a single block where all sentences end in punctuation and are separate thoughts, break each line into its own paragraph.
+    # Handles both multi-block templates (separated by blank lines) and single-block templates (long text with multiple sentences).
     final_body_blocks = []
     for bb in body_blocks:
-        if len(body_blocks) == 1 and len(bb) > 1 and all(len(l) > 20 and re.search(r'[\.\?!,;]$', l) for l in bb):
+        if len(body_blocks) == 1 and len(bb) > 1:
+            # If the user provided one long block with multiple lines, group every 2-3 lines into a balanced paragraph
+            curr_chunk = []
             for line in bb:
-                final_body_blocks.append(line)
+                curr_chunk.append(line)
+                if len(curr_chunk) >= 2 and re.search(r'[\.\?!]$', line):
+                    final_body_blocks.append(" ".join(curr_chunk))
+                    curr_chunk = []
+            if curr_chunk:
+                final_body_blocks.append(" ".join(curr_chunk))
         else:
             # Join line-wrapped text within paragraph with space
             paragraph_text = " ".join(bb)
