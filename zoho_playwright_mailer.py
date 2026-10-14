@@ -227,7 +227,7 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     return rich_html, plain_text
 
 DEFAULT_PROFILE_NAME = "Instance 1 (Primary)"
-AVAILABLE_INSTANCES = ["Instance 1", "Instance 2"]
+AVAILABLE_INSTANCES = ["Instance 1", "Instance 2", "Instance 3"]
 
 PROFILE_BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zoho_browser_profiles")
 os.makedirs(PROFILE_BASE_DIR, exist_ok=True)
@@ -428,10 +428,10 @@ class ModernDarkZohoAutomationApp:
         self.instance_combo.pack(side=tk.LEFT, padx=(6, 10))
         self.instance_combo.bind("<<ComboboxSelected>>", self._on_instance_changed)
 
-        self.new_window_btn = ttk.Button(inst_row, text="➕ Launch 2nd Instance", command=self.launch_new_app_instance, style="StandardDark.TButton")
+        self.new_window_btn = ttk.Button(inst_row, text="➕ Launch New Instance", command=self.launch_new_app_instance, style="StandardDark.TButton")
         self.new_window_btn.pack(side=tk.RIGHT)
 
-        ttk.Label(inst_row, text="(Optimized for Dual Instance Concurrency)", style="DarkMuted.TLabel").pack(side=tk.RIGHT, padx=6)
+        ttk.Label(inst_row, text="(Multi-Instance Concurrency: Up to 3 Instances)", style="DarkMuted.TLabel").pack(side=tk.RIGHT, padx=6)
 
         # Top Button Row: Launch Zoho on left corner, Browse Excel on right corner
         btn_row = ttk.Frame(setup_card, style="Card.TFrame")
@@ -735,17 +735,21 @@ class ModernDarkZohoAutomationApp:
             self.cmd_queue.put(("SWITCH_PROFILE", self.current_instance))
 
     def launch_new_app_instance(self):
-        """Spawns the counterpart instance (Instance 1 <-> Instance 2) in a separate concurrent process."""
+        """Spawns the next available instance (Instance 1 -> Instance 2 -> Instance 3) in a separate concurrent process."""
         import subprocess
-        # Toggle between Instance 1 and Instance 2
-        next_inst = "Instance 2" if self.current_instance == "Instance 1" else "Instance 1"
+        # Cycle through AVAILABLE_INSTANCES (Instance 1 -> 2 -> 3 -> 1)
+        try:
+            curr_idx = AVAILABLE_INSTANCES.index(self.current_instance)
+            next_inst = AVAILABLE_INSTANCES[(curr_idx + 1) % len(AVAILABLE_INSTANCES)]
+        except ValueError:
+            next_inst = AVAILABLE_INSTANCES[0]
 
         script_path = os.path.abspath(__file__)
         python_exe = sys.executable
-        self.log(f"Spawning dual concurrent process for: {next_inst}...")
+        self.log(f"Spawning concurrent process for: {next_inst}...")
         try:
             subprocess.Popen([python_exe, script_path, "--instance", next_inst])
-            self.log(f"✓ Dual concurrent MimicMail window launched for {next_inst}!")
+            self.log(f"✓ Concurrent MimicMail window launched for {next_inst}!")
         except Exception as e:
             messagebox.showerror("Launch Error", f"Unable to spawn instance:\n{str(e)}")
 
