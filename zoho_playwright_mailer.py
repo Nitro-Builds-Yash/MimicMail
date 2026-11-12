@@ -12,6 +12,53 @@ import pandas as pd
 from playwright.sync_api import sync_playwright
 from PIL import Image, ImageTk
 
+STEALTH_INIT_SCRIPT = """
+(() => {
+    // 1. Mask navigator.webdriver
+    Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+        configurable: true
+    });
+
+    // 2. Mock Chrome runtime object
+    if (!window.chrome) {
+        window.chrome = {};
+    }
+    window.chrome.runtime = window.chrome.runtime || {
+        PlatformOs: { MAC: 'mac', WIN: 'win', ANDROID: 'android', CROS: 'cros', LINUX: 'linux', OPENBSD: 'openbsd' },
+        PlatformArch: { ARM: 'arm', X86_32: 'x86-32', X86_64: 'x86-64' },
+        PlatformNaclArch: { ARM: 'arm', X86_32: 'x86-32', X86_64: 'x86-64' },
+        onMessage: { addListener: () => {}, removeListener: () => {} },
+        sendMessage: () => {}
+    };
+
+    // 3. Realistic navigator.plugins & mimeTypes
+    try {
+        const fakePlugins = [
+            { name: 'PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+            { name: 'Chrome PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+            { name: 'Chromium PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' }
+        ];
+        Object.defineProperty(navigator, 'plugins', {
+            get: () => fakePlugins,
+            configurable: true
+        });
+        Object.defineProperty(navigator, 'languages', {
+            get: () => ['en-US', 'en'],
+            configurable: true
+        });
+    } catch(e) {}
+
+    // 4. Overwrite Permissions query for notifications
+    const originalQuery = window.navigator.permissions.query;
+    window.navigator.permissions.query = (parameters) => (
+        parameters.name === 'notifications' ?
+            Promise.resolve({ state: Notification.permission }) :
+            originalQuery(parameters)
+    );
+})();
+"""
+
 DEFAULT_SUBJECT = "{title}"
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGO_PATH = os.path.join(_BASE_DIR, "assets", "pulsus_logo.png")
@@ -967,17 +1014,27 @@ class ModernDarkZohoAutomationApp:
                                 user_data_dir=active_profile_dir,
                                 headless=False,
                                 no_viewport=True,
-                                timeout=45000,
+                                timeout=60000,
                                 permissions=["clipboard-read", "clipboard-write"],
-                                args=["--start-maximized", "--disable-blink-features=AutomationControlled"]
+                                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                                args=[
+                                    "--start-maximized",
+                                    "--disable-blink-features=AutomationControlled",
+                                    "--no-sandbox",
+                                    "--disable-infobars",
+                                    "--disable-dev-shm-usage"
+                                ]
                             )
+                            # Inject stealth script into all frames on creation
+                            browser_context.add_init_script(STEALTH_INIT_SCRIPT)
+
                             browser_page = browser_context.pages[0] if browser_context.pages else browser_context.new_page()
                             try:
-                                browser_page.goto("https://mail.zoho.com", timeout=45000)
+                                browser_page.goto("https://mail.zoho.com", timeout=60000, wait_until="domcontentloaded")
                             except Exception as nav_e:
                                 self.log(f"Navigation warning (will proceed): {nav_e}")
 
-                            self.log(f"Browser for {self.current_instance} is open! Log in and leave this window open.")
+                            self.log(f"Browser for {self.current_instance} is open! Please log in if prompted and leave this window open.")
                             self.root.after(0, lambda: self.session_indicator.config(text=f"● Active & Connected [{self.current_instance}]", fg=self.accent_red))
                         else:
                             self.log("Browser already open. Bringing tab to front...")
@@ -993,22 +1050,68 @@ class ModernDarkZohoAutomationApp:
                 elif cmd == "START_AUTOMATION":
                     try:
                         active_profile_dir = get_instance_profile_dir(self.current_instance)
-                        # 1. Ensure browser is open in this same thread
+                        # Clean up locks in START_AUTOMATION as well
+                        for lock_name in ["SingletonLock", "SingletonSocket", "SingletonCookie", "lockfile"]:
+                            lock_path = os.path.join(active_profile_dir, lock_name)
+                            if os.path.exists(lock_path):
+                                try:
+                                    os.remove(lock_path)
+                                except Exception:
+                                    pass
+
+                        # 1. Ensure browser is open in this same thread with full stealth parameters
                         if not (browser_context and browser_page and not browser_page.is_closed()):
                             self.log(f"Opening browser session for {self.current_instance}...")
                             browser_context = playwright_instance.chromium.launch_persistent_context(
                                 user_data_dir=active_profile_dir,
                                 headless=False,
+                                no_viewport=True,
+                                timeout=60000,
                                 permissions=["clipboard-read", "clipboard-write"],
-                                args=["--start-maximized"]
+                                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                                args=[
+                                    "--start-maximized",
+                                    "--disable-blink-features=AutomationControlled",
+                                    "--no-sandbox",
+                                    "--disable-infobars",
+                                    "--disable-dev-shm-usage"
+                                ]
                             )
+                            browser_context.add_init_script(STEALTH_INIT_SCRIPT)
                             browser_page = browser_context.pages[0] if browser_context.pages else browser_context.new_page()
 
                         browser_page.bring_to_front()
 
-                        # Ensure we are on the actual Zoho Mail client (/zm/), not accounts or calendar or landing page
+                        # Helper to check if Zoho Mail UI is ready
+                        def is_mailbox_ready(page):
+                            try:
+                                return bool(page.query_selector("button[title*='New Mail' i], .zmNavMail, #zm_mail, [data-app='mail']"))
+                            except Exception:
+                                return False
+
                         curr_url = browser_page.url.lower()
                         self.log(f"Current page URL: {curr_url}")
+
+                        # Check if user is currently on login / accounts / 2FA screen
+                        if "accounts.zoho" in curr_url or "signin" in curr_url or "login" in curr_url:
+                            self.log("⚠️ Zoho Login/Verification detected. Waiting for you to complete sign-in in the browser...")
+                            self.root.after(0, lambda: self.session_indicator.config(text="● Waiting for Login...", fg="#e67e22"))
+                            # Wait up to 180 seconds for login to finish and reach mail.zoho
+                            logged_in = False
+                            for _ in range(90):
+                                if self.stop_requested:
+                                    break
+                                time.sleep(2)
+                                try:
+                                    u = browser_page.url.lower()
+                                    if "mail.zoho" in u and "accounts.zoho" not in u:
+                                        logged_in = True
+                                        self.log("Login detected! Proceeding into Zoho Mailbox...")
+                                        break
+                                except Exception:
+                                    pass
+                            if not logged_in and not self.stop_requested:
+                                raise Exception("Login timeout: Please complete your Zoho login in the browser window and click Start Automation again.")
 
                         # Check if "Access Email" button or "Mail" tile exists on screen (Zoho home portal)
                         for access_btn_sel in [
@@ -1023,16 +1126,20 @@ class ModernDarkZohoAutomationApp:
                                 if btn and btn.is_visible():
                                     self.log("Found 'Access Email' button on page. Clicking to navigate into Mail...")
                                     btn.click()
-                                    time.sleep(4)
+                                    time.sleep(3)
                                     break
                             except Exception:
                                 pass
 
-                        # If not inside the mailbox app, directly navigate to https://mail.zoho.com/zm/
-                        if "mail.zoho" not in browser_page.url.lower() or "/zm" not in browser_page.url.lower():
-                            self.log("Navigating directly to Zoho Mail Inbox: https://mail.zoho.com/zm/ ...")
-                            browser_page.goto("https://mail.zoho.com/zm/")
-                            time.sleep(5)
+                        # If not inside the mailbox app and not on login page, navigate gently to https://mail.zoho.com/zm/
+                        if not is_mailbox_ready(browser_page) and ("mail.zoho" not in browser_page.url.lower() or "/zm" not in browser_page.url.lower()):
+                            if "accounts.zoho" not in browser_page.url.lower():
+                                self.log("Navigating directly to Zoho Mail Inbox: https://mail.zoho.com/zm/ ...")
+                                try:
+                                    browser_page.goto("https://mail.zoho.com/zm/", timeout=60000, wait_until="domcontentloaded")
+                                except Exception as e_nav:
+                                    self.log(f"Navigation notice: {e_nav}")
+                                time.sleep(4)
 
                         # Make sure Mail icon is selected in the left navigation sidebar (not Calendar/Events)
                         try:
@@ -1665,6 +1772,15 @@ class ModernDarkZohoAutomationApp:
                 pass
 
         time.sleep(1.5)
+
+        # Allow Zoho auto-draft synchronization to register the message to avoid missing draft state / spam flagging
+        try:
+            page.keyboard.press("Space")
+            time.sleep(0.1)
+            page.keyboard.press("Backspace")
+            time.sleep(1.5)
+        except Exception:
+            pass
 
         # 5. Click Send
         self.log("Clicking Send button...")
