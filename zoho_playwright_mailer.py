@@ -63,10 +63,17 @@ def mark_excel_row_status(excel_path: str, row_idx: int, status_str: str = "SENT
     except Exception as e:
         print(f"Excel sync notice for row {row_idx + 1}: {e}")
 
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LOGO_PATH = os.path.join(_BASE_DIR, "assets", "pulsus_logo.png")
+if getattr(sys, 'frozen', False):
+    APP_BASE_DIR = os.path.dirname(sys.executable)
+    # When PyInstaller unpacks bundle in _MEIPASS
+    BUNDLE_RESOURCE_DIR = getattr(sys, '_MEIPASS', APP_BASE_DIR)
+else:
+    APP_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    BUNDLE_RESOURCE_DIR = APP_BASE_DIR
+
+LOGO_PATH = os.path.join(BUNDLE_RESOURCE_DIR, "assets", "pulsus_logo.png")
 if not os.path.exists(LOGO_PATH):
-    LOGO_PATH = os.path.join(_BASE_DIR, "pulsus_logo.png")
+    LOGO_PATH = os.path.join(BUNDLE_RESOURCE_DIR, "pulsus_logo.png")
 
 # Default user-customizable templates for the 3 slots (Clean, professional text format matching exact spacing and alignment)
 SAMPLE_HTML_TEMPLATES = [
@@ -287,10 +294,10 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     return rich_html, plain_text
 
 # Persistent Chromium Browser Profile Directory
-PROFILE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zoho_browser_profile")
+PROFILE_DIR = os.path.join(APP_BASE_DIR, "zoho_browser_profile")
 # Compatibility check: if zoho_browser_profiles/instance_1 exists and has data, fallback or initialize
 if not os.path.exists(PROFILE_DIR):
-    legacy_inst1 = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zoho_browser_profiles", "instance_1")
+    legacy_inst1 = os.path.join(APP_BASE_DIR, "zoho_browser_profiles", "instance_1")
     if os.path.exists(legacy_inst1):
         PROFILE_DIR = legacy_inst1
 os.makedirs(PROFILE_DIR, exist_ok=True)
@@ -979,6 +986,19 @@ class ModernDarkZohoAutomationApp:
         playwright_instance = None
         browser_context = None
         browser_page = None
+
+        # Automatically check and install Playwright Chromium if missing on target machine
+        try:
+            from playwright._impl._driver import compute_driver_executable
+            import subprocess
+            driver_exec, driver_cli = compute_driver_executable()
+            # If driver exists, check whether chromium needs to be installed
+            # Running 'install chromium' ensures any clean machine runs out of the box
+            res = subprocess.run([driver_exec, driver_cli, "install", "chromium"], capture_output=True, text=True, timeout=120)
+            if res.returncode == 0:
+                self.log("✓ Chromium browser environment verified.")
+        except Exception as e:
+            self.log(f"Chromium check notice: {e}")
 
         try:
             playwright_instance = sync_playwright().start()
