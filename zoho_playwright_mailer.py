@@ -60,6 +60,27 @@ STEALTH_INIT_SCRIPT = """
 """
 
 DEFAULT_SUBJECT = "{title}"
+
+def mark_excel_row_status(excel_path: str, row_idx: int, status_str: str = "SENT"):
+    """Thread-safe update of the 'Status' column in the Excel workbook without destroying formulas or formatting."""
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(excel_path)
+        sheet = wb.active
+        headers = [c.value for c in sheet[1]]
+        status_col = None
+        for ci, h in enumerate(headers, start=1):
+            if h and str(h).strip().lower() == "status":
+                status_col = ci
+                break
+        if status_col is None:
+            status_col = len(headers) + 1
+            sheet.cell(row=1, column=status_col, value="Status")
+        sheet.cell(row=row_idx + 2, column=status_col, value=status_str)
+        wb.save(excel_path)
+    except Exception as e:
+        print(f"Excel sync notice for row {row_idx + 1}: {e}")
+
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGO_PATH = os.path.join(_BASE_DIR, "assets", "pulsus_logo.png")
 if not os.path.exists(LOGO_PATH):
@@ -315,6 +336,8 @@ class ModernDarkZohoAutomationApp:
         self.excel_file_path = None
         self.total_rows_count = 0
         self.sent_rows_count = 0
+        self.subject_lines_pool = []
+        self.subjects_file_path = None
 
         # Thread-safe work queue and background worker
         self.cmd_queue = queue.Queue()
@@ -442,7 +465,7 @@ class ModernDarkZohoAutomationApp:
         title_lbl = tk.Label(title_box, text="MIMICMAIL  |  OUTREACH AUTOMATION", bg="#ffffff", fg=self.accent_red, font=("Segoe UI", 16, "bold"))
         title_lbl.pack(anchor=tk.W)
 
-        sub_lbl = tk.Label(title_box, text="Pulsus Group Clinical Outreach & Playwright Delivery Engine", bg="#ffffff", fg=self.fg_muted, font=("Segoe UI", 9))
+        sub_lbl = tk.Label(title_box, text="Intelligent Outreach & Playwright Delivery Engine", bg="#ffffff", fg=self.fg_muted, font=("Segoe UI", 9))
         sub_lbl.pack(anchor=tk.W)
 
         badge_box = tk.Frame(header_row, bg="#ffffff")
@@ -457,7 +480,7 @@ class ModernDarkZohoAutomationApp:
         self.ecg_step = 0
         self._animate_ecg_heartbeat()
 
-        badge_lbl = tk.Label(badge_content, text="OFFICIAL CLINICAL PLATFORM", bg="#fdf2f3", fg=self.accent_red,
+        badge_lbl = tk.Label(badge_content, text="AUTOMATION PLATFORM", bg="#fdf2f3", fg=self.accent_red,
                              font=("Segoe UI", 8, "bold"))
         badge_lbl.pack(side=tk.LEFT, padx=(0, 4))
 
@@ -510,20 +533,32 @@ class ModernDarkZohoAutomationApp:
         self.file_label = ttk.Label(info_row, text="📄 No registry loaded (Required: email, author name, title)", style="DarkMuted.TLabel")
         self.file_label.pack(side=tk.RIGHT)
 
-        # Card 2: 5 HTML Template Slots
-        tmpl_card = ttk.LabelFrame(left_col, text="  2. Custom HTML Templates (5 Slots - Random Selection)  ", style="DarkCard.TLabelframe", padding="12")
+        # Card 2: Email Templates & Subject Line Strategy
+        tmpl_card = ttk.LabelFrame(left_col, text="  2. Outreach Templates & Subject Strategy (Random Picker)  ", style="DarkCard.TLabelframe", padding="12")
         tmpl_card.pack(fill=tk.BOTH, expand=True)
 
         subj_box = ttk.Frame(tmpl_card, style="Card.TFrame")
         subj_box.pack(fill=tk.X, pady=(0, 6))
-        ttk.Label(subj_box, text="Subject Line Template:", style="Dark.TLabel").pack(side=tk.LEFT)
-        ttk.Label(subj_box, text="(Uses {title} per recipient)", style="DarkMuted.TLabel").pack(side=tk.LEFT, padx=6)
+
+        ttk.Label(subj_box, text="Subject Line:", style="Dark.TLabel").pack(side=tk.LEFT)
+
+        self.upload_subj_btn = ttk.Button(subj_box, text="📄 Upload .txt Subjects", command=self.upload_subject_file, style="ActionBlue.TButton")
+        self.upload_subj_btn.pack(side=tk.RIGHT, padx=(6, 0))
+
+        self.clear_subj_btn = ttk.Button(subj_box, text="Reset", command=self.clear_subject_pool, style="StandardDark.TButton")
+        self.clear_subj_btn.pack(side=tk.RIGHT, padx=(4, 0))
 
         self.subj_entry = tk.Entry(subj_box, bg="#ffffff", fg="#1f1d1a", insertbackground="#cf142b",
                                    highlightbackground=self.border_card, highlightcolor=self.accent_red, highlightthickness=1,
                                    relief="flat", font=("Segoe UI", 10))
         self.subj_entry.insert(0, DEFAULT_SUBJECT)
         self.subj_entry.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(8, 0), ipady=3)
+
+        # Subject status indicator bar
+        subj_status_row = ttk.Frame(tmpl_card, style="Card.TFrame")
+        subj_status_row.pack(fill=tk.X, pady=(0, 6))
+        self.subj_status_lbl = ttk.Label(subj_status_row, text="Default single template: {title}  (Upload a .txt file for 40 randomized subject lines)", style="DarkMuted.TLabel")
+        self.subj_status_lbl.pack(side=tk.LEFT)
 
         # Notebook tabs for 5 templates
         nb_header = ttk.Frame(tmpl_card, style="Card.TFrame")
@@ -745,6 +780,50 @@ class ModernDarkZohoAutomationApp:
         # Schedule next frame at ~30 FPS for smooth live cardiac monitoring
         self.root.after(35, self._animate_ecg_heartbeat)
 
+    def upload_subject_file(self):
+        """Uploads a .txt file containing subject lines (one per line) for random selection."""
+        path = filedialog.askopenfilename(
+            title="Select Text File with Subject Lines",
+            filetypes=[("Text Files (*.txt)", "*.txt"), ("All Files (*.*)", "*.*")]
+        )
+        if not path:
+            return
+
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                lines = [line.strip() for line in f if line.strip()]
+
+            if not lines:
+                messagebox.showwarning("Empty File", "The chosen .txt file contains no non-empty subject lines.")
+                return
+
+            self.subject_lines_pool = lines
+            self.subjects_file_path = path
+            fname = os.path.basename(path)
+            self.subj_status_lbl.config(
+                text=f"✓ Loaded {len(lines)} subjects from '{fname}' (Random selection active for each batch)",
+                foreground=self.accent_red
+            )
+            self.subj_entry.delete(0, tk.END)
+            self.subj_entry.insert(0, f"[Randomized from {fname}: {len(lines)} subjects]")
+            self.subj_entry.config(state="readonly")
+            self.log(f"Loaded {len(lines)} subject line(s) from '{fname}'. Random picker enabled for each message.")
+        except Exception as e:
+            messagebox.showerror("Read Error", f"Unable to read subject file:\n{str(e)}")
+
+    def clear_subject_pool(self):
+        """Resets subject line strategy back to default single template entry."""
+        self.subject_lines_pool = []
+        self.subjects_file_path = None
+        self.subj_entry.config(state="normal")
+        self.subj_entry.delete(0, tk.END)
+        self.subj_entry.insert(0, DEFAULT_SUBJECT)
+        self.subj_status_lbl.config(
+            text="Default single template: {title}  (Upload a .txt file for 40 randomized subject lines)",
+            foreground=self.fg_muted
+        )
+        self.log("Reset subject lines to default template entry.")
+
     def _load_template_file(self, idx: int):
         path = filedialog.askopenfilename(
             title=f"Select HTML Template for Slot {idx+1}",
@@ -860,7 +939,7 @@ class ModernDarkZohoAutomationApp:
                     f"Please make sure your Excel spreadsheet includes the header columns:\n"
                     f"• email (Recipient's email address)\n"
                     f"• author name (Recipient's name or author)\n"
-                    f"• title (Recipient's clinical role or subject)\n\n"
+                    f"• title (Recipient's role or subject)\n\n"
                     f"Note: No 'Status' column is required; dispatch tracking is handled automatically."
                 )
                 self.log(f"⚠️ Warning: '{os.path.basename(path)}' is missing required columns: {missing_str}")
@@ -918,9 +997,11 @@ class ModernDarkZohoAutomationApp:
             messagebox.showwarning("File Missing", "Please select an Excel workbook first.")
             return
 
+        # Check subject lines (either uploaded pool or text input)
+        subj_pool = list(self.subject_lines_pool) if self.subject_lines_pool else []
         subj_tmpl = self.subj_entry.get().strip()
-        if not subj_tmpl:
-            messagebox.showwarning("Missing Subject", "Please enter a subject line template (e.g. {title}).")
+        if not subj_pool and not subj_tmpl:
+            messagebox.showwarning("Missing Subject", "Please enter a subject line template (e.g. {title}) or upload a .txt subjects file.")
             return
 
         # Gather all non-empty user templates across the 3 slots
@@ -934,7 +1015,10 @@ class ModernDarkZohoAutomationApp:
             messagebox.showwarning("No Templates", "Please provide at least 1 template in the 3 slots (paste HTML or load a file).")
             return
 
-        self.log(f"Verified {len(active_templates)} active user template(s). Random picker enabled across them.")
+        if subj_pool:
+            self.log(f"Verified {len(active_templates)} template(s) and {len(subj_pool)} uploaded subject line(s). Random picker active.")
+        else:
+            self.log(f"Verified {len(active_templates)} active user template(s) with subject template: '{subj_tmpl}'.")
 
         self.is_running = True
         self.stop_requested = False
@@ -942,6 +1026,7 @@ class ModernDarkZohoAutomationApp:
 
         params = {
             "subj_tmpl": subj_tmpl,
+            "subj_pool": subj_pool,
             "body_tmpls": active_templates,
             "base_mins": self.interval_var.get(),
             "use_jitter": self.jitter_var.get(),
@@ -1179,152 +1264,219 @@ class ModernDarkZohoAutomationApp:
 
     def _execute_batch(self, context, primary_page, params):
         excel_path = params["excel_path"]
-        subj_tmpl = params["subj_tmpl"]
+        subj_tmpl = params.get("subj_tmpl", DEFAULT_SUBJECT)
+        subj_pool = params.get("subj_pool", [])
         body_tmpls = params.get("body_tmpls", [params.get("body_tmpl", "")])
         base_mins = params["base_mins"]
         use_jitter = params["use_jitter"]
         parallel_tabs = params.get("parallel_tabs", 1)
 
-        df = pd.read_excel(excel_path)
-        col_map = {str(c).strip().lower(): c for c in df.columns}
-        name_col = next((col_map[k] for k in ["author name", "author_name", "author", "name"] if k in col_map), "name")
-        email_col = next((col_map[k] for k in ["email", "email address", "e-mail"] if k in col_map), "email")
-        title_col = next((col_map[k] for k in ["title", "designation", "role"] if k in col_map), "title")
-
-        total_records = len(df)
-        has_status_col = any(c.strip().lower() == "status" for c in df.columns)
-        if has_status_col:
-            status_col_name = next(c for c in df.columns if c.strip().lower() == "status")
-            status_series = df[status_col_name].astype(str).str.strip().str.upper()
-            pending_indices = [i for i, val in enumerate(status_series) if val != "SENT"]
-            prev_sent_count = (status_series == "SENT").sum()
-        else:
-            pending_indices = list(range(total_records))
-            prev_sent_count = 0
-
-        if not pending_indices:
-            self.log("All rows in this spreadsheet are already marked as SENT.")
-            self.root.after(0, lambda: messagebox.showinfo("Completed", "All recipients in this spreadsheet are already sent!"))
-            return
-
         BATCH_CAP = 40
-        target_indices = pending_indices[:BATCH_CAP]
-        total_in_batch = len(target_indices)
+        ONE_HOUR_REST_SEC = 3600  # 1 hour interval between chunks of 40 emails
+        total_session_sent = 0
 
-        self.log(f"Dispatching batch of {total_in_batch} recipients across {parallel_tabs} parallel tab(s) with {len(body_tmpls)} template pool...")
-
-        sent_count = 0
-        errors_in_session = 0
-
-        # Create/manage pool of tabs inside this authenticated session
-        tab_pool = [primary_page]
-        if parallel_tabs > 1:
-            self.log(f"Spinning up {parallel_tabs - 1} extra background tab(s) for parallel processing...")
-            for t_idx in range(parallel_tabs - 1):
-                try:
-                    new_tab = context.new_page()
-                    new_tab.goto("https://mail.zoho.com/zm/")
-                    time.sleep(2)
-                    tab_pool.append(new_tab)
-                except Exception as t_err:
-                    self.log(f"Tab creation notice: {t_err}")
-
-        # Chunk the recipients into parallel slices according to active tab count
-        chunk_size = max(1, len(tab_pool))
-        for chunk_start in range(0, total_in_batch, chunk_size):
-            if self.stop_requested:
-                self.log("Automation interrupted by user.")
+        # Loop through batches of 40 until all rows in the Excel spreadsheet are completed
+        batch_number = 1
+        while not self.stop_requested:
+            # 1. Read fresh data from Excel to identify remaining pending rows
+            try:
+                df = pd.read_excel(excel_path)
+            except Exception as read_err:
+                self.log(f"Spreadsheet read error: {read_err}")
                 break
 
-            current_chunk = target_indices[chunk_start:chunk_start + chunk_size]
+            col_map = {str(c).strip().lower(): c for c in df.columns}
+            name_col = next((col_map[k] for k in ["author name", "author_name", "author", "name"] if k in col_map), "name")
+            email_col = next((col_map[k] for k in ["email", "email address", "e-mail"] if k in col_map), "email")
+            title_col = next((col_map[k] for k in ["title", "designation", "role"] if k in col_map), "title")
 
-            for tab_idx, r_idx in enumerate(current_chunk):
+            total_records = len(df)
+            has_status_col = any(c.strip().lower() == "status" for c in df.columns)
+            if has_status_col:
+                status_col_name = next(c for c in df.columns if c.strip().lower() == "status")
+                status_series = df[status_col_name].astype(str).str.strip().str.upper()
+                pending_indices = [i for i, val in enumerate(status_series) if val != "SENT"]
+                prev_sent_count = (status_series == "SENT").sum()
+            else:
+                pending_indices = list(range(total_records))
+                prev_sent_count = 0
+
+            if not pending_indices:
+                if batch_number == 1:
+                    self.log("All rows in this spreadsheet are already marked as SENT.")
+                    self.root.after(0, lambda: messagebox.showinfo("Completed", "All recipients in this spreadsheet are already sent!"))
+                else:
+                    self.log(f"All {total_records} rows in this spreadsheet are now completely finished!")
+                    self.root.after(0, lambda s=total_session_sent: messagebox.showinfo("Outreach Complete", f"All data in spreadsheet completed!\nTotal dispatched in this session: {s}"))
+                return
+
+            target_indices = pending_indices[:BATCH_CAP]
+            total_in_batch = len(target_indices)
+
+            self.log(f"=== Starting Chunk {batch_number}: {total_in_batch} recipients (Remaining pending: {len(pending_indices)}) ===")
+            if subj_pool:
+                self.log(f"Using pool of {len(subj_pool)} uploaded subject lines with random selection per mail.")
+
+            sent_in_batch = 0
+            errors_in_session = 0
+
+            # Create/manage pool of tabs inside this authenticated session
+            tab_pool = [primary_page]
+            if parallel_tabs > 1:
+                self.log(f"Spinning up {parallel_tabs - 1} extra background tab(s) for parallel processing...")
+                for t_idx in range(parallel_tabs - 1):
+                    try:
+                        new_tab = context.new_page()
+                        new_tab.goto("https://mail.zoho.com/zm/")
+                        time.sleep(2)
+                        tab_pool.append(new_tab)
+                    except Exception as t_err:
+                        self.log(f"Tab creation notice: {t_err}")
+
+            # Chunk the recipients into parallel slices according to active tab count
+            chunk_size = max(1, len(tab_pool))
+            for chunk_start in range(0, total_in_batch, chunk_size):
                 if self.stop_requested:
+                    self.log("Automation interrupted by user.")
                     break
 
-                active_page = tab_pool[tab_idx % len(tab_pool)]
-                row = df.loc[r_idx]
-                r_name = str(row[name_col]).strip() if pd.notna(row[name_col]) else "Valued Professional"
-                r_email = str(row[email_col]).strip() if pd.notna(row[email_col]) else ""
-                r_title = str(row[title_col]).strip() if pd.notna(row[title_col]) else "Professional"
+                current_chunk = target_indices[chunk_start:chunk_start + chunk_size]
 
-                import re
-                EMAIL_REGEX = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w+$")
-                if not r_email or not EMAIL_REGEX.match(r_email):
-                    self.log(f"Row {r_idx + 1}: SKIPPED (Invalid email address '{r_email}')")
-                    errors_in_session += 1
-                    continue
+                for tab_idx, r_idx in enumerate(current_chunk):
+                    if self.stop_requested:
+                        break
 
-                chosen_body_tmpl = random.choice(body_tmpls)
+                    active_page = tab_pool[tab_idx % len(tab_pool)]
+                    row = df.loc[r_idx]
+                    r_name = str(row[name_col]).strip() if pd.notna(row[name_col]) else "Valued Professional"
+                    r_email = str(row[email_col]).strip() if pd.notna(row[email_col]) else ""
+                    r_title = str(row[title_col]).strip() if pd.notna(row[title_col]) else "Professional"
 
-                personalized_subject = subj_tmpl
-                for ph, val in [("{title}", r_title), ("{name}", r_name), ("{TITLE}", r_title), ("{NAME}", r_name)]:
-                    personalized_subject = personalized_subject.replace(ph, val)
+                    import re
+                    EMAIL_REGEX = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w+$")
+                    if not r_email or not EMAIL_REGEX.match(r_email):
+                        self.log(f"Row {r_idx + 1}: SKIPPED (Invalid email address '{r_email}')")
+                        errors_in_session += 1
+                        mark_excel_row_status(excel_path, r_idx, "INVALID_EMAIL")
+                        continue
 
-                # Generate formatted Times New Roman HTML with bolded {name} and {title}, plus clean plain text fallback
-                rich_body_html, plain_body_text = build_formatted_email_content(
-                    raw_template=chosen_body_tmpl,
-                    r_name=r_name,
-                    r_title=r_title,
-                    r_email=r_email
-                )
+                    chosen_body_tmpl = random.choice(body_tmpls)
 
-                tab_label = f"Tab {tab_idx + 1}" if len(tab_pool) > 1 else "Primary"
-                self.log(f"[{tab_label}] Dispatching ({chunk_start + tab_idx + 1}/{total_in_batch}) to {r_name} <{r_email}>...")
+                    # Determine subject line: randomly choose from uploaded .txt pool if present, else template string
+                    if subj_pool:
+                        raw_chosen_subj = random.choice(subj_pool)
+                    else:
+                        raw_chosen_subj = subj_tmpl
 
-                try:
-                    self._send_in_browser(active_page, r_email, personalized_subject, rich_body_html, plain_body_text)
-                    sent_count += 1
-                    self.log(f"SUCCESS [{tab_label}]: Email dispatched to {r_email}.")
-                except Exception as err:
-                    errors_in_session += 1
-                    self.log(f"SKIPPED ROW {r_idx + 1} ({r_email}) due to error: {err}")
+                    personalized_subject = raw_chosen_subj
+                    for ph, val in [("{title}", r_title), ("{name}", r_name), ("{TITLE}", r_title), ("{NAME}", r_name)]:
+                        personalized_subject = personalized_subject.replace(ph, val)
+
+                    # Generate formatted Times New Roman HTML with bolded {name} and {title}, plus clean plain text fallback
+                    rich_body_html, plain_body_text = build_formatted_email_content(
+                        raw_template=chosen_body_tmpl,
+                        r_name=r_name,
+                        r_title=r_title,
+                        r_email=r_email
+                    )
+
+                    tab_label = f"Tab {tab_idx + 1}" if len(tab_pool) > 1 else "Primary"
+                    self.log(f"[{tab_label}] Dispatching ({chunk_start + tab_idx + 1}/{total_in_batch}) to {r_name} <{r_email}> | Subj: {personalized_subject[:36]}...")
+
                     try:
-                        active_page.keyboard.press("Escape")
+                        self._send_in_browser(active_page, r_email, personalized_subject, rich_body_html, plain_body_text)
+                        sent_in_batch += 1
+                        total_session_sent += 1
+                        mark_excel_row_status(excel_path, r_idx, "SENT")
+                        self.log(f"SUCCESS [{tab_label}]: Email dispatched to {r_email} (Row {r_idx + 1} marked SENT).")
+                    except Exception as err:
+                        errors_in_session += 1
+                        self.log(f"SKIPPED ROW {r_idx + 1} ({r_email}) due to error: {err}")
+                        mark_excel_row_status(excel_path, r_idx, f"ERROR: {str(err)[:30]}")
+                        try:
+                            active_page.keyboard.press("Escape")
+                            time.sleep(1)
+                        except Exception:
+                            pass
+
+                    # Update live stats and status graph purely in UI memory
+                    curr_sent = prev_sent_count + sent_in_batch
+                    curr_errors = errors_in_session
+                    curr_pending = max(0, total_records - curr_sent - curr_errors)
+                    curr_pct = int((curr_sent / total_records * 100)) if total_records > 0 else 0
+
+                    self.root.after(0, lambda s=curr_sent, t=total_records, p=curr_pending, e=curr_errors, pct=curr_pct: (
+                        self.stats_lbl.config(text=f"Total: {t} | Sent: {s} | Pending: {p}"),
+                        self.progress_bar.config(value=pct),
+                        self.progress_pct_lbl.config(text=f"{pct}%"),
+                        self._draw_status_graph(sent=s, pending=p, errors=e)
+                    ))
+
+                # Anti-bot human delay between dispatch waves inside the 40-chunk
+                if chunk_start + chunk_size < total_in_batch and not self.stop_requested:
+                    base_sec = base_mins * 60.0
+                    jitter_sec = random.randint(-25, 35) if use_jitter else 0
+                    sleep_sec = max(20.0, base_sec + jitter_sec)
+
+                    self.log(f"Pacing: Resting for {sleep_sec:.0f} seconds before next dispatch wave...")
+
+                    remaining = int(sleep_sec)
+                    while remaining > 0 and not self.stop_requested:
+                        m, s = divmod(remaining, 60)
+                        self.root.after(0, lambda mm=m, ss=s: self.timer_display.config(
+                            text=f"⏱ Next dispatch: {mm:02d}:{ss:02d}", fg=self.accent_red
+                        ))
                         time.sleep(1)
+                        remaining -= 1
+
+            # Clean up any auxiliary tabs created for this chunk
+            if len(tab_pool) > 1:
+                for extra_tab in tab_pool[1:]:
+                    try:
+                        extra_tab.close()
                     except Exception:
                         pass
+                tab_pool = [primary_page]
 
-                # Update live stats and status graph purely in UI memory
-                curr_sent = prev_sent_count + sent_count
-                curr_errors = errors_in_session
-                curr_pending = max(0, total_records - curr_sent - curr_errors)
-                curr_pct = int((curr_sent / total_records * 100)) if total_records > 0 else 0
+            self.log(f"Chunk {batch_number} completed! Dispatched: {sent_in_batch} emails.")
 
-                self.root.after(0, lambda s=curr_sent, t=total_records, p=curr_pending, e=curr_errors, pct=curr_pct: (
-                    self.stats_lbl.config(text=f"Total: {t} | Sent: {s} | Pending: {p}"),
-                    self.progress_bar.config(value=pct),
-                    self.progress_pct_lbl.config(text=f"{pct}%"),
-                    self._draw_status_graph(sent=s, pending=p, errors=e)
+            if self.stop_requested:
+                break
+
+            # 2. Check if more rows remain to be sent
+            try:
+                df_check = pd.read_excel(excel_path)
+                has_sc = any(c.strip().lower() == "status" for c in df_check.columns)
+                if has_sc:
+                    sc_name = next(c for c in df_check.columns if c.strip().lower() == "status")
+                    remaining_unprocessed = (df_check[sc_name].astype(str).str.strip().str.upper() != "SENT").sum()
+                else:
+                    remaining_unprocessed = 0
+            except Exception:
+                remaining_unprocessed = 0
+
+            if remaining_unprocessed == 0:
+                self.log(f"All data completed! Total session emails sent: {total_session_sent}")
+                self.root.after(0, lambda s=total_session_sent: messagebox.showinfo("Completed", f"All spreadsheet records have been successfully sent!\nTotal sent: {s}"))
+                return
+
+            # 3. Reassign next 40 after 1 hour rest interval
+            self.log(f"Chunk cap reached. Next 40 emails will be reassigned in 1 hour ({remaining_unprocessed} rows remaining)...")
+            wait_remaining = ONE_HOUR_REST_SEC
+            while wait_remaining > 0 and not self.stop_requested:
+                hrs, rem = divmod(wait_remaining, 3600)
+                mins, secs = divmod(rem, 60)
+                time_str = f"{hrs:02d}:{mins:02d}:{secs:02d}"
+                self.root.after(0, lambda ts=time_str: self.timer_display.config(
+                    text=f"⏳ 1-Hr Rest: Next chunk in {ts}", fg="#e67e22"
                 ))
+                time.sleep(1)
+                wait_remaining -= 1
 
-            # Anti-bot human delay between dispatch waves
-            if chunk_start + chunk_size < total_in_batch and not self.stop_requested:
-                base_sec = base_mins * 60.0
-                jitter_sec = random.randint(-25, 35) if use_jitter else 0
-                sleep_sec = max(20.0, base_sec + jitter_sec)
+            batch_number += 1
 
-                self.log(f"Pacing: Resting for {sleep_sec:.0f} seconds before next dispatch wave...")
-
-                remaining = int(sleep_sec)
-                while remaining > 0 and not self.stop_requested:
-                    m, s = divmod(remaining, 60)
-                    self.root.after(0, lambda mm=m, ss=s: self.timer_display.config(
-                        text=f"⏱ Next dispatch: {mm:02d}:{ss:02d}", fg=self.accent_red
-                    ))
-                    time.sleep(1)
-                    remaining -= 1
-
-        # Clean up any auxiliary tabs created
-        if len(tab_pool) > 1:
-            for extra_tab in tab_pool[1:]:
-                try:
-                    extra_tab.close()
-                except Exception:
-                    pass
-
-        self.log(f"Batch completed! Total sent: {sent_count}")
-        self.root.after(0, lambda s=sent_count: messagebox.showinfo("Done", f"Automation finished!\nTotal sent: {s}"))
+        self.log(f"Automation finished or halted! Session total sent: {total_session_sent}")
+        self.root.after(0, lambda s=total_session_sent: messagebox.showinfo("Done", f"Automation finished!\nTotal sent in session: {s}"))
 
     def _send_in_browser(self, page, to_email, subject, body_html, body_text=None):
         if body_text is None:
