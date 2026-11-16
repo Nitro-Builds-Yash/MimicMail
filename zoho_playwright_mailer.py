@@ -14,48 +14,30 @@ from PIL import Image, ImageTk
 
 STEALTH_INIT_SCRIPT = """
 (() => {
-    // 1. Mask navigator.webdriver
-    Object.defineProperty(navigator, 'webdriver', {
-        get: () => undefined,
-        configurable: true
-    });
-
-    // 2. Mock Chrome runtime object
-    if (!window.chrome) {
-        window.chrome = {};
-    }
-    window.chrome.runtime = window.chrome.runtime || {
-        PlatformOs: { MAC: 'mac', WIN: 'win', ANDROID: 'android', CROS: 'cros', LINUX: 'linux', OPENBSD: 'openbsd' },
-        PlatformArch: { ARM: 'arm', X86_32: 'x86-32', X86_64: 'x86-64' },
-        PlatformNaclArch: { ARM: 'arm', X86_32: 'x86-32', X86_64: 'x86-64' },
-        onMessage: { addListener: () => {}, removeListener: () => {} },
-        sendMessage: () => {}
-    };
-
-    // 3. Realistic navigator.plugins & mimeTypes
     try {
-        const fakePlugins = [
-            { name: 'PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
-            { name: 'Chrome PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
-            { name: 'Chromium PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' }
-        ];
-        Object.defineProperty(navigator, 'plugins', {
-            get: () => fakePlugins,
-            configurable: true
-        });
-        Object.defineProperty(navigator, 'languages', {
-            get: () => ['en-US', 'en'],
+        // 1. Mask navigator.webdriver
+        Object.defineProperty(navigator, 'webdriver', {
+            get: () => undefined,
             configurable: true
         });
     } catch(e) {}
 
-    // 4. Overwrite Permissions query for notifications
-    const originalQuery = window.navigator.permissions.query;
-    window.navigator.permissions.query = (parameters) => (
-        parameters.name === 'notifications' ?
-            Promise.resolve({ state: Notification.permission }) :
-            originalQuery(parameters)
-    );
+    try {
+        // 2. Ensure chrome object exists cleanly without breaking SPA internals
+        if (!window.chrome) {
+            window.chrome = {};
+        }
+    } catch(e) {}
+
+    try {
+        // 3. Normalise notification permissions query
+        const originalQuery = window.navigator.permissions.query;
+        window.navigator.permissions.query = (parameters) => (
+            parameters && parameters.name === 'notifications' ?
+                Promise.resolve({ state: Notification.permission }) :
+                originalQuery(parameters)
+        );
+    } catch(e) {}
 })();
 """
 
@@ -1101,7 +1083,7 @@ class ModernDarkZohoAutomationApp:
                                 no_viewport=True,
                                 timeout=60000,
                                 permissions=["clipboard-read", "clipboard-write"],
-                                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                                ignore_default_args=["--enable-automation"],
                                 args=[
                                     "--start-maximized",
                                     "--disable-blink-features=AutomationControlled",
@@ -1153,7 +1135,7 @@ class ModernDarkZohoAutomationApp:
                                 no_viewport=True,
                                 timeout=60000,
                                 permissions=["clipboard-read", "clipboard-write"],
-                                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                                ignore_default_args=["--enable-automation"],
                                 args=[
                                     "--start-maximized",
                                     "--disable-blink-features=AutomationControlled",
@@ -1191,12 +1173,27 @@ class ModernDarkZohoAutomationApp:
                                     u = browser_page.url.lower()
                                     if "mail.zoho" in u and "accounts.zoho" not in u:
                                         logged_in = True
-                                        self.log("Login detected! Proceeding into Zoho Mailbox...")
+                                        self.log("Login detected! Waiting for Zoho Mail app to initialize...")
+                                        # Let Zoho's SPA finish rendering its auth token and inbox
+                                        time.sleep(5)
                                         break
                                 except Exception:
                                     pass
                             if not logged_in and not self.stop_requested:
                                 raise Exception("Login timeout: Please complete your Zoho login in the browser window and click Start Automation again.")
+
+                        # Helper to check if Zoho Mail UI is ready
+                        def is_mailbox_ready(page):
+                            try:
+                                return bool(page.query_selector("button[title*='New Mail' i], .zmNavMail, #zm_mail, [data-app='mail']"))
+                            except Exception:
+                                return False
+
+                        # Wait for mailbox to stabilize if already on mail.zoho.com
+                        for _ in range(10):
+                            if is_mailbox_ready(browser_page):
+                                break
+                            time.sleep(1)
 
                         # Check if "Access Email" button or "Mail" tile exists on screen (Zoho home portal)
                         for access_btn_sel in [
@@ -1211,20 +1208,28 @@ class ModernDarkZohoAutomationApp:
                                 if btn and btn.is_visible():
                                     self.log("Found 'Access Email' button on page. Clicking to navigate into Mail...")
                                     btn.click()
-                                    time.sleep(3)
+                                    time.sleep(4)
                                     break
                             except Exception:
                                 pass
 
-                        # If not inside the mailbox app and not on login page, navigate gently to https://mail.zoho.com/zm/
-                        if not is_mailbox_ready(browser_page) and ("mail.zoho" not in browser_page.url.lower() or "/zm" not in browser_page.url.lower()):
-                            if "accounts.zoho" not in browser_page.url.lower():
-                                self.log("Navigating directly to Zoho Mail Inbox: https://mail.zoho.com/zm/ ...")
+                        # If still not inside mailbox and not on accounts.zoho, only navigate if URL is not already mail.zoho.com/zm/
+                        if not is_mailbox_ready(browser_page) and ("accounts.zoho" not in browser_page.url.lower()):
+                            curr_u = browser_page.url.lower()
+                            if "/zm" not in curr_u:
+                                self.log("Navigating to Zoho Mail Inbox: https://mail.zoho.com/zm/ ...")
                                 try:
                                     browser_page.goto("https://mail.zoho.com/zm/", timeout=60000, wait_until="domcontentloaded")
                                 except Exception as e_nav:
                                     self.log(f"Navigation notice: {e_nav}")
                                 time.sleep(4)
+                            else:
+                                # Already at /zm/, don't interrupt with another goto; just wait for SPA hydration
+                                self.log("Waiting for Zoho Mail SPA hydration...")
+                                try:
+                                    browser_page.wait_for_selector("button[title*='New Mail' i], .zmNavMail, #zm_mail, [data-app='mail']", timeout=15000)
+                                except Exception:
+                                    pass
 
                         # Make sure Mail icon is selected in the left navigation sidebar (not Calendar/Events)
                         try:
