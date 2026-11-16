@@ -612,7 +612,7 @@ class ModernDarkZohoAutomationApp:
         pacing_box = tk.Frame(action_card, bg="#ffffff", pady=6)
         pacing_box.pack(fill=tk.X, pady=(8, 0))
 
-        ttk.Label(pacing_box, text="⏳ Rest Interval:", style="Dark.TLabel").pack(anchor=tk.W)
+        ttk.Label(pacing_box, text="⏳ Inter-Email Pacing Interval:", style="Dark.TLabel").pack(anchor=tk.W)
         slider_row = ttk.Frame(pacing_box, style="Card.TFrame")
         slider_row.pack(fill=tk.X, pady=(2, 4))
 
@@ -1460,18 +1460,21 @@ class ModernDarkZohoAutomationApp:
                 self.root.after(0, lambda s=total_session_sent: messagebox.showinfo("Completed", f"All spreadsheet records have been successfully sent!\nTotal sent: {s}"))
                 return
 
-            # 3. Reassign next 40 after 1 hour rest interval
-            self.log(f"Chunk cap reached. Next 40 emails will be reassigned in 1 hour ({remaining_unprocessed} rows remaining)...")
+            # 3. Mandatory cooldown: At least 1 hour (3600 seconds) rest interval between each 40-mail chunk
+            self.log(f"Chunk cap reached (40 emails dispatched). Enforcing mandatory 1-hour cooldown interval ({remaining_unprocessed} rows remaining)...")
             wait_remaining = ONE_HOUR_REST_SEC
             while wait_remaining > 0 and not self.stop_requested:
                 hrs, rem = divmod(wait_remaining, 3600)
                 mins, secs = divmod(rem, 60)
                 time_str = f"{hrs:02d}:{mins:02d}:{secs:02d}"
                 self.root.after(0, lambda ts=time_str: self.timer_display.config(
-                    text=f"⏳ 1-Hr Rest: Next chunk in {ts}", fg="#e67e22"
+                    text=f"⏳ 1-Hr Interval: Next 40 in {ts}", fg="#e67e22"
                 ))
                 time.sleep(1)
                 wait_remaining -= 1
+
+            if not self.stop_requested:
+                self.log("1-hour interval completed. Resuming next chunk of 40 emails...")
 
             batch_number += 1
 
