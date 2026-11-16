@@ -635,6 +635,7 @@ class ModernDarkZohoAutomationApp:
         self.template_notebook.pack(fill=tk.BOTH, expand=True, pady=(2, 0))
 
         self.template_text_widgets = []
+        times_font = tkfont.Font(family="Times New Roman", size=11)
         for i in range(3):
             tab_frame = ttk.Frame(self.template_notebook, style="Card.TFrame")
             self.template_notebook.add(tab_frame, text=f" Template {i+1} ")
@@ -650,27 +651,7 @@ class ModernDarkZohoAutomationApp:
             clear_btn.pack(side=tk.RIGHT, padx=(0, 4))
 
             txt = tk.Text(tab_frame, wrap=tk.WORD, height=10, bg="#111111", fg="#f0f0f0", insertbackground="#ffffff",
-                          relief="flat", font=("Segoe UI", 9), highlightbackground=self.border_card, highlightthickness=1)
-            txt.insert(tk.END, SAMPLE_HTML_TEMPLATES[i])
-            txt.pack(fill=tk.BOTH, expand=True, pady=(0, 2))
-            self.template_text_widgets.append(txt)
-            self.template_notebook.add(tab_frame, text=f" Template {i+1} ")
-
-            tb = ttk.Frame(tab_frame, style="Card.TFrame")
-            tb.pack(fill=tk.X, pady=(4, 4))
-            ttk.Label(tb, text=f"Slot {i+1} message text:", style="DarkMuted.TLabel").pack(side=tk.LEFT)
-
-            load_btn = ttk.Button(tb, text=f"📂 Load File", command=lambda idx=i: self._load_template_file(idx), style="StandardDark.TButton")
-            load_btn.pack(side=tk.RIGHT)
-
-            clear_btn = ttk.Button(tb, text="🗑 Clear", command=lambda idx=i: self._clear_template_slot(idx), style="StandardDark.TButton")
-            clear_btn.pack(side=tk.RIGHT, padx=4)
-
-            times_font = tkfont.Font(family="Times New Roman", size=11)
-            txt = tk.Text(tab_frame, height=6, wrap=tk.WORD, bg="#ffffff", fg="#1f1d1a",
-                          insertbackground="#cf142b", highlightbackground=self.border_card,
-                          highlightcolor=self.accent_red, highlightthickness=1, relief="flat", font=times_font)
-            txt.configure(font=times_font)
+                          relief="flat", font=times_font, highlightbackground=self.border_card, highlightthickness=1)
             initial_content = SAMPLE_HTML_TEMPLATES[i] if i < len(SAMPLE_HTML_TEMPLATES) else ""
             txt.insert(tk.END, initial_content)
             txt.pack(fill=tk.BOTH, expand=True, pady=(0, 2))
@@ -750,7 +731,7 @@ class ModernDarkZohoAutomationApp:
         ttk.Label(pacing_box, text="Max emails per session (Set to 150 for optimal inbox safety)", style="DarkMuted.TLabel").pack(anchor=tk.W)
 
         # Deliverability & Spam Guard Options
-        guard_box = tk.Frame(action_card, bg="#ffffff", pady=4)
+        guard_box = tk.Frame(action_card, bg="#161616", pady=4)
         guard_box.pack(fill=tk.X, pady=(4, 0))
 
         self.optout_var = tk.BooleanVar(value=True)
@@ -767,7 +748,7 @@ class ModernDarkZohoAutomationApp:
         status_card = ttk.LabelFrame(right_col, text="  4. Delivery Status & Graph  ", style="DarkCard.TLabelframe", padding="14")
         status_card.pack(fill=tk.BOTH, expand=True)
 
-        self.timer_display = tk.Label(status_card, text="⏱ Queue: Ready", bg="#ffffff", fg=self.accent_red, font=("Segoe UI", 10, "bold"))
+        self.timer_display = tk.Label(status_card, text="⏱ Queue: Ready", bg="#161616", fg="#ffffff", font=("Segoe UI", 10, "bold"))
         self.timer_display.pack(anchor=tk.W, pady=(0, 4))
 
         self.stats_lbl = ttk.Label(status_card, text="Total: 0  |  Sent: 0  |  Pending: 0", style="DarkMuted.TLabel")
