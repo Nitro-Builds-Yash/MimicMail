@@ -71,10 +71,6 @@ else:
     APP_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     BUNDLE_RESOURCE_DIR = APP_BASE_DIR
 
-LOGO_PATH = os.path.join(BUNDLE_RESOURCE_DIR, "assets", "pulsus_logo.png")
-if not os.path.exists(LOGO_PATH):
-    LOGO_PATH = os.path.join(BUNDLE_RESOURCE_DIR, "pulsus_logo.png")
-
 PAYMENT_QR_PATH = os.path.join(BUNDLE_RESOURCE_DIR, "assets", "payment_qr.jpg")
 if not os.path.exists(PAYMENT_QR_PATH):
     PAYMENT_QR_PATH = os.path.join(APP_BASE_DIR, "assets", "payment_qr.jpg")
@@ -455,18 +451,17 @@ class ModernDarkZohoAutomationApp:
             self.worker_thread.start()
 
     def _apply_dark_theme(self):
-        # Clean, Prestigious Red, Cream, and White Palette
-        self.bg_root = "#f8f5f0"        # Light Warm Cream canvas
-        self.bg_card = "#ffffff"        # Pure Crisp White cards
-        self.bg_card_alt = "#fff9f2"    # Soft Cream highlight
-        self.border_card = "#e6ded1"    # Elegant Warm Grey/Cream border
-        self.fg_primary = "#1f1d1a"     # Deep Charcoal/Soft Black for crystal legibility
-        self.fg_muted = "#766d62"       # Muted Warm Grey
-        self.accent_red = "#cf142b"     # Official Pulsus Crimson Red
-        self.accent_red_hover = "#ad0d21"
-        self.accent_red_light = "#fdf2f3"# Ultra-light Red Tint
-        self.accent_red_border = "#e899a2"
-        self.accent_cream = "#f4eee1"   # Warm Cream button surface
+        # Monochromatic Minimalist Black & White Palette
+        self.bg_root = "#0d0d0d"        # Deep true black canvas
+        self.bg_card = "#161616"        # Solid dark charcoal card surface
+        self.bg_card_alt = "#1f1f1f"    # Secondary dark grey surface
+        self.border_card = "#2d2d2d"    # Crisp minimalist monochrome border
+        self.fg_primary = "#f5f5f5"     # Pure crisp white for primary text
+        self.fg_muted = "#8a8a8a"       # Refined neutral muted grey
+        self.accent_bw = "#ffffff"      # High-contrast white accent
+        self.btn_bg = "#ffffff"         # White button surface
+        self.btn_fg = "#000000"         # Black button text
+        self.btn_bg_alt = "#242424"     # Dark secondary button surface
 
         self.root.configure(bg=self.bg_root)
 
@@ -478,16 +473,16 @@ class ModernDarkZohoAutomationApp:
 
         self.style.configure(".", background=self.bg_root, foreground=self.fg_primary)
 
-        # Notebook & Tabs
+        # Notebook & Tabs (Minimalist Black & White)
         self.style.configure("Dark.TNotebook", background=self.bg_card, borderwidth=0)
-        self.style.configure("Dark.TNotebook.Tab", background="#f4eee1", foreground="#5c5346", font=("Segoe UI", 9, "bold"), padding=[14, 5])
+        self.style.configure("Dark.TNotebook.Tab", background="#222222", foreground="#888888", font=("Segoe UI", 9, "bold"), padding=[14, 5])
         self.style.map("Dark.TNotebook.Tab",
-                       background=[("selected", "#cf142b"), ("active", "#e6ded1")],
-                       foreground=[("selected", "#ffffff"), ("active", "#1f1d1a")])
+                       background=[("selected", "#ffffff"), ("active", "#333333")],
+                       foreground=[("selected", "#000000"), ("active", "#ffffff")])
 
         # LabelFrames
         self.style.configure("DarkCard.TLabelframe", background=self.bg_card, bordercolor=self.border_card, relief="solid", borderwidth=1)
-        self.style.configure("DarkCard.TLabelframe.Label", background=self.bg_card, foreground=self.accent_red, font=("Segoe UI", 10, "bold"))
+        self.style.configure("DarkCard.TLabelframe.Label", background=self.bg_card, foreground="#ffffff", font=("Segoe UI", 10, "bold"))
 
         # Frames
         self.style.configure("Root.TFrame", background=self.bg_root)
@@ -497,36 +492,36 @@ class ModernDarkZohoAutomationApp:
         self.style.configure("Dark.TLabel", background=self.bg_card, foreground=self.fg_primary, font=("Segoe UI", 9))
         self.style.configure("DarkMuted.TLabel", background=self.bg_card, foreground=self.fg_muted, font=("Segoe UI", 9))
 
-        # Buttons - All unified royal blue palette as requested
+        # Buttons (Strictly Black & White High Contrast)
         self.style.configure("StandardDark.TButton", font=("Segoe UI", 9, "bold"), padding=(12, 6),
-                             background="#1a62c6", foreground="#ffffff", bordercolor="#124996", lightcolor="#2a75dc", darkcolor="#124996")
+                             background="#262626", foreground="#ffffff", bordercolor="#404040", lightcolor="#333333", darkcolor="#1a1a1a")
         self.style.map("StandardDark.TButton",
-                       background=[("active", "#1550a2"), ("disabled", "#98b9e8")],
-                       foreground=[("disabled", "#ffffff")])
+                       background=[("active", "#383838"), ("disabled", "#181818")],
+                       foreground=[("disabled", "#555555")])
 
         self.style.configure("ActionBlue.TButton", font=("Segoe UI", 9, "bold"), padding=(14, 6),
-                             background="#1a62c6", foreground="#ffffff", bordercolor="#124996", lightcolor="#2a75dc", darkcolor="#124996")
+                             background="#ffffff", foreground="#000000", bordercolor="#ffffff", lightcolor="#ffffff", darkcolor="#e0e0e0")
         self.style.map("ActionBlue.TButton",
-                       background=[("active", "#1550a2"), ("disabled", "#98b9e8")],
-                       foreground=[("disabled", "#ffffff")])
+                       background=[("active", "#dcdcdc"), ("disabled", "#333333")],
+                       foreground=[("disabled", "#777777")])
 
         self.style.configure("ActionGreen.TButton", font=("Segoe UI", 13, "bold"), padding=(24, 12),
-                             background="#1a62c6", foreground="#ffffff", bordercolor="#124996", lightcolor="#2a75dc", darkcolor="#124996")
+                             background="#ffffff", foreground="#000000", bordercolor="#ffffff", lightcolor="#ffffff", darkcolor="#e0e0e0")
         self.style.map("ActionGreen.TButton",
-                       background=[("active", "#1550a2"), ("disabled", "#98b9e8")],
-                       foreground=[("disabled", "#ffffff")])
+                       background=[("active", "#dcdcdc"), ("disabled", "#333333")],
+                       foreground=[("disabled", "#777777")])
 
         self.style.configure("DangerRed.TButton", font=("Segoe UI", 10, "bold"), padding=(16, 12),
-                             background="#2a3b5c", foreground="#ffffff", bordercolor="#124996", lightcolor="#3b4f76", darkcolor="#124996")
+                             background="#1a1a1a", foreground="#ffffff", bordercolor="#444444", lightcolor="#2a2a2a", darkcolor="#111111")
         self.style.map("DangerRed.TButton",
-                       background=[("active", "#1c2840"), ("disabled", "#a0aec0")],
-                       foreground=[("disabled", "#ffffff")])
+                       background=[("active", "#2d2d2d"), ("disabled", "#141414")],
+                       foreground=[("disabled", "#555555")])
 
-        # Progressbar
-        self.style.configure("Green.Horizontal.TProgressbar", troughcolor="#f4eee1", background="#1a62c6", bordercolor="#d5ccbe", lightcolor="#2a75dc", darkcolor="#1a62c6")
+        # Progressbar (Crisp White indicator on Dark background)
+        self.style.configure("Green.Horizontal.TProgressbar", troughcolor="#1a1a1a", background="#ffffff", bordercolor="#333333", lightcolor="#ffffff", darkcolor="#cccccc")
 
         # Sliders
-        self.style.configure("Dark.Horizontal.TScale", background=self.bg_card, troughcolor="#f4eee1", bordercolor=self.border_card)
+        self.style.configure("Dark.Horizontal.TScale", background=self.bg_card, troughcolor="#222222", bordercolor=self.border_card)
 
         # Checkbutton
         self.style.configure("Dark.TCheckbutton", background=self.bg_card, foreground=self.fg_primary, font=("Segoe UI", 9))
@@ -537,52 +532,37 @@ class ModernDarkZohoAutomationApp:
         container.pack(fill=tk.BOTH, expand=True)
 
         # =========================================================================
-        # 1. TOP HEADER / BRANDING BANNER (Clean White & Crimson Accent)
+        # 1. TOP HEADER / BRANDING BANNER (Minimalist Monochrome Black & White)
         # =========================================================================
-        header_card = tk.Frame(container, bg="#ffffff", highlightbackground=self.border_card, highlightthickness=1, padx=20, pady=12)
+        header_card = tk.Frame(container, bg="#161616", highlightbackground=self.border_card, highlightthickness=1, padx=20, pady=14)
         header_card.pack(fill=tk.X, pady=(0, 12))
 
-        header_row = tk.Frame(header_card, bg="#ffffff")
+        header_row = tk.Frame(header_card, bg="#161616")
         header_row.pack(fill=tk.X)
 
-        # Pulsus Logo
-        self.logo_photo = None
-        if os.path.exists(LOGO_PATH):
-            try:
-                pil_img = Image.open(LOGO_PATH)
-                w_orig, h_orig = pil_img.size
-                target_h = 44
-                target_w = int(w_orig * (target_h / float(h_orig)))
-                pil_resized = pil_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
-                self.logo_photo = ImageTk.PhotoImage(pil_resized)
-                logo_lbl = tk.Label(header_row, image=self.logo_photo, bg="#ffffff")
-                logo_lbl.pack(side=tk.LEFT, padx=(0, 16))
-            except Exception:
-                pass
-
-        title_box = tk.Frame(header_row, bg="#ffffff")
+        title_box = tk.Frame(header_row, bg="#161616")
         title_box.pack(side=tk.LEFT, fill=tk.Y)
 
-        title_lbl = tk.Label(title_box, text="MIMICMAIL  |  OUTREACH AUTOMATION", bg="#ffffff", fg=self.accent_red, font=("Segoe UI", 16, "bold"))
+        title_lbl = tk.Label(title_box, text="MIMICMAIL", bg="#161616", fg="#ffffff", font=("Segoe UI", 18, "bold"))
         title_lbl.pack(anchor=tk.W)
 
-        sub_lbl = tk.Label(title_box, text="Intelligent Outreach & Playwright Delivery Engine", bg="#ffffff", fg=self.fg_muted, font=("Segoe UI", 9))
+        sub_lbl = tk.Label(title_box, text="Intelligent Outreach & Automation Engine  |  Multi-Subject Randomization", bg="#161616", fg=self.fg_muted, font=("Segoe UI", 9))
         sub_lbl.pack(anchor=tk.W)
 
-        badge_box = tk.Frame(header_row, bg="#ffffff")
+        badge_box = tk.Frame(header_row, bg="#161616")
         badge_box.pack(side=tk.RIGHT)
 
-        badge_content = tk.Frame(badge_box, bg="#fdf2f3", highlightbackground=self.accent_red_border, highlightthickness=1, padx=6, pady=3)
+        badge_content = tk.Frame(badge_box, bg="#222222", highlightbackground="#3d3d3d", highlightthickness=1, padx=8, pady=4)
         badge_content.pack(side=tk.RIGHT)
 
-        # 3D Live Glowing ECG Heartbeat Lifeline Monitor Canvas
-        self.ecg_canvas = tk.Canvas(badge_content, width=86, height=26, bg="#1a0407", highlightthickness=1, highlightbackground="#cf142b")
+        # Monochrome Pulsing Monitor Canvas
+        self.ecg_canvas = tk.Canvas(badge_content, width=86, height=26, bg="#0a0a0a", highlightthickness=1, highlightbackground="#333333")
         self.ecg_canvas.pack(side=tk.LEFT, padx=(2, 8))
         self.ecg_step = 0
         self._animate_ecg_heartbeat()
 
-        self.badge_lbl = tk.Label(badge_content, text="AUTOMATION PLATFORM", bg="#fdf2f3", fg=self.accent_red,
-                             font=("Segoe UI", 8, "bold"))
+        self.badge_lbl = tk.Label(badge_content, text="ACTIVE", bg="#222222", fg="#ffffff",
+                                  font=("Segoe UI", 8, "bold"))
         self.badge_lbl.pack(side=tk.LEFT, padx=(0, 4))
 
         # =========================================================================
@@ -613,44 +593,43 @@ class ModernDarkZohoAutomationApp:
         info_row = ttk.Frame(setup_card, style="Card.TFrame")
         info_row.pack(fill=tk.X)
 
-        self.session_indicator = tk.Label(info_row, text="● Browser: Ready", bg="#ffffff", fg=self.fg_muted, font=("Segoe UI", 9, "bold"))
+        self.session_indicator = tk.Label(info_row, text="● Browser: Ready", bg="#161616", fg=self.fg_muted, font=("Segoe UI", 9, "bold"))
         self.session_indicator.pack(side=tk.LEFT)
 
         self.file_label = ttk.Label(info_row, text="📄 No registry loaded (Required: email, author name, title)", style="DarkMuted.TLabel")
         self.file_label.pack(side=tk.RIGHT)
 
-        # Card 2: Email Templates & Subject Line Strategy
-        tmpl_card = ttk.LabelFrame(left_col, text="  2. Outreach Templates & Subject Strategy (Random Picker)  ", style="DarkCard.TLabelframe", padding="12")
+        # Card 2: Email Templates & Subject Line Strategy (.txt Random Selection)
+        tmpl_card = ttk.LabelFrame(left_col, text="  2. Outreach Templates & Subject Strategy (.txt Random Selection)  ", style="DarkCard.TLabelframe", padding="12")
         tmpl_card.pack(fill=tk.BOTH, expand=True)
 
         subj_box = ttk.Frame(tmpl_card, style="Card.TFrame")
         subj_box.pack(fill=tk.X, pady=(0, 6))
 
-        ttk.Label(subj_box, text="Subject Line:", style="Dark.TLabel").pack(side=tk.LEFT)
+        ttk.Label(subj_box, text="Subject Pool (.txt):", style="Dark.TLabel").pack(side=tk.LEFT)
 
         self.upload_subj_btn = ttk.Button(subj_box, text="📄 Upload .txt Subjects", command=self.upload_subject_file, style="ActionBlue.TButton")
         self.upload_subj_btn.pack(side=tk.RIGHT, padx=(6, 0))
 
-        self.clear_subj_btn = ttk.Button(subj_box, text="Reset", command=self.clear_subject_pool, style="StandardDark.TButton")
+        self.clear_subj_btn = ttk.Button(subj_box, text="Clear", command=self.clear_subject_pool, style="StandardDark.TButton")
         self.clear_subj_btn.pack(side=tk.RIGHT, padx=(4, 0))
 
-        self.subj_entry = tk.Entry(subj_box, bg="#ffffff", fg="#1f1d1a", insertbackground="#cf142b",
-                                   highlightbackground=self.border_card, highlightcolor=self.accent_red, highlightthickness=1,
-                                   relief="flat", font=("Segoe UI", 10))
-        self.subj_entry.insert(0, DEFAULT_SUBJECT)
+        self.subj_entry = tk.Entry(subj_box, bg="#111111", fg="#ffffff", insertbackground="#ffffff",
+                                   highlightbackground=self.border_card, highlightcolor="#ffffff", highlightthickness=1,
+                                   relief="flat", font=("Segoe UI", 10), state="readonly")
         self.subj_entry.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(8, 0), ipady=3)
 
         # Subject status indicator bar
         subj_status_row = ttk.Frame(tmpl_card, style="Card.TFrame")
         subj_status_row.pack(fill=tk.X, pady=(0, 6))
-        self.subj_status_lbl = ttk.Label(subj_status_row, text="Default single template: {title}  (Upload a .txt file for 40 randomized subject lines)", style="DarkMuted.TLabel")
+        self.subj_status_lbl = ttk.Label(subj_status_row, text="⚠️ Required: Upload a .txt file with subject lines (Randomly picked for every email)", style="DarkMuted.TLabel")
         self.subj_status_lbl.pack(side=tk.LEFT)
 
-        # Notebook tabs for 5 templates
+        # Notebook tabs for 3 templates
         nb_header = ttk.Frame(tmpl_card, style="Card.TFrame")
         nb_header.pack(fill=tk.X, pady=(2, 4))
         ttk.Label(nb_header, text="Paste or load email message templates below (Picks randomly per recipient):", style="DarkMuted.TLabel").pack(side=tk.LEFT)
-        tk.Label(nb_header, text="Times New Roman | Bold {name} & {title}", bg="#fdf2f3", fg=self.accent_red, font=("Segoe UI", 8, "bold"), padx=6, pady=2).pack(side=tk.RIGHT)
+        tk.Label(nb_header, text="Times New Roman | Bold {name} & {title}", bg="#222222", fg="#ffffff", font=("Segoe UI", 8, "bold"), padx=6, pady=2).pack(side=tk.RIGHT)
 
         self.template_notebook = ttk.Notebook(tmpl_card, style="Dark.TNotebook")
         self.template_notebook.pack(fill=tk.BOTH, expand=True, pady=(2, 0))
@@ -658,6 +637,23 @@ class ModernDarkZohoAutomationApp:
         self.template_text_widgets = []
         for i in range(3):
             tab_frame = ttk.Frame(self.template_notebook, style="Card.TFrame")
+            self.template_notebook.add(tab_frame, text=f" Template {i+1} ")
+
+            tb = ttk.Frame(tab_frame, style="Card.TFrame")
+            tb.pack(fill=tk.X, pady=(4, 4))
+            ttk.Label(tb, text=f"Slot {i+1} message text:", style="DarkMuted.TLabel").pack(side=tk.LEFT)
+
+            load_btn = ttk.Button(tb, text=f"📂 Load File", command=lambda idx=i: self._load_template_file(idx), style="StandardDark.TButton")
+            load_btn.pack(side=tk.RIGHT)
+
+            clear_btn = ttk.Button(tb, text="🗑 Clear", command=lambda idx=i: self._clear_template_slot(idx), style="StandardDark.TButton")
+            clear_btn.pack(side=tk.RIGHT, padx=(0, 4))
+
+            txt = tk.Text(tab_frame, wrap=tk.WORD, height=10, bg="#111111", fg="#f0f0f0", insertbackground="#ffffff",
+                          relief="flat", font=("Segoe UI", 9), highlightbackground=self.border_card, highlightthickness=1)
+            txt.insert(tk.END, SAMPLE_HTML_TEMPLATES[i])
+            txt.pack(fill=tk.BOTH, expand=True, pady=(0, 2))
+            self.template_text_widgets.append(txt)
             self.template_notebook.add(tab_frame, text=f" Template {i+1} ")
 
             tb = ttk.Frame(tab_frame, style="Card.TFrame")
@@ -784,27 +780,27 @@ class ModernDarkZohoAutomationApp:
         self.progress_bar = ttk.Progressbar(pbar_box, style="Green.Horizontal.TProgressbar", mode="determinate", maximum=100, value=0)
         self.progress_bar.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8))
 
-        self.progress_pct_lbl = tk.Label(pbar_box, text="0%", bg="#ffffff", fg=self.accent_red, font=("Segoe UI", 10, "bold"), width=5)
+        self.progress_pct_lbl = tk.Label(pbar_box, text="0%", bg="#161616", fg="#ffffff", font=("Segoe UI", 10, "bold"), width=5)
         self.progress_pct_lbl.pack(side=tk.RIGHT)
 
         # Status Graph Canvas
         ttk.Label(status_card, text="Live Ratio Breakdown:", style="Dark.TLabel").pack(anchor=tk.W, pady=(4, 2))
-        self.graph_canvas = tk.Canvas(status_card, bg="#f8f5f0", height=38, highlightthickness=1, highlightbackground=self.border_card)
+        self.graph_canvas = tk.Canvas(status_card, bg="#0d0d0d", height=38, highlightthickness=1, highlightbackground=self.border_card)
         self.graph_canvas.pack(fill=tk.X, pady=(0, 4))
         self.graph_canvas.bind("<Configure>", lambda e: self._draw_status_graph())
 
-        self.graph_legend_lbl = tk.Label(status_card, text="🟥 Sent: 0  |  ⬜ Pending: 0  |  ⚠️ Errors: 0",
-                                         bg="#ffffff", fg=self.fg_muted, font=("Segoe UI", 8), justify=tk.LEFT)
+        self.graph_legend_lbl = tk.Label(status_card, text="⬜ Sent: 0  |  ⬛ Pending: 0  |  ◽ Errors: 0",
+                                         bg="#161616", fg=self.fg_muted, font=("Segoe UI", 8), justify=tk.LEFT)
         self.graph_legend_lbl.pack(anchor=tk.W)
 
         # =========================================================================
-        # 3. LIVE TERMINAL LOG AT THE BOTTOM (Clean Cream Background)
+        # 3. LIVE TERMINAL LOG AT THE BOTTOM (Clean Black & White Background)
         # =========================================================================
         log_frame = ttk.LabelFrame(container, text="  Live Outreach Audit Terminal  ", style="DarkCard.TLabelframe", padding="8")
         log_frame.pack(fill=tk.X)
 
-        self.log_text = tk.Text(log_frame, height=4, state=tk.DISABLED, wrap=tk.WORD, bg="#ffffff", fg="#2b261f",
-                                insertbackground="#cf142b", relief="flat", font=("Consolas", 8),
+        self.log_text = tk.Text(log_frame, height=4, state=tk.DISABLED, wrap=tk.WORD, bg="#0d0d0d", fg="#e0e0e0",
+                                insertbackground="#ffffff", relief="flat", font=("Consolas", 8),
                                 highlightbackground=self.border_card, highlightthickness=1)
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
@@ -819,8 +815,8 @@ class ModernDarkZohoAutomationApp:
 
         total = sent + pending + errors
         if total == 0:
-            self.graph_canvas.create_rectangle(0, 0, w, h, fill="#f4eee1", outline="")
-            self.graph_canvas.create_text(w // 2, h // 2, text="Load spreadsheet to view graph", fill="#8a8070", font=("Segoe UI", 8, "italic"))
+            self.graph_canvas.create_rectangle(0, 0, w, h, fill="#141414", outline="")
+            self.graph_canvas.create_text(w // 2, h // 2, text="Load spreadsheet to view graph", fill="#666666", font=("Segoe UI", 8, "italic"))
             return
 
         sent_pct = (sent / total)
@@ -831,27 +827,29 @@ class ModernDarkZohoAutomationApp:
         pending_w = int(w * pending_pct)
         err_w = w - sent_w - pending_w
 
-        # Draw segmented colored bar in Red, Cream, and Grey
+        # Draw segmented colored bar in Pure Monochrome White, Dark Grey, and Mid Grey
         x_curr = 0
         if sent_w > 0:
-            # Crimson Red for Sent
-            self.graph_canvas.create_rectangle(x_curr, 0, x_curr + sent_w, h, fill="#cf142b", outline="")
+            # Solid White for Sent
+            self.graph_canvas.create_rectangle(x_curr, 0, x_curr + sent_w, h, fill="#ffffff", outline="")
             if sent_w > 40:
-                self.graph_canvas.create_text(x_curr + sent_w // 2, h // 2, text=f"{sent}", fill="#ffffff", font=("Segoe UI", 8, "bold"))
+                self.graph_canvas.create_text(x_curr + sent_w // 2, h // 2, text=f"{sent}", fill="#000000", font=("Segoe UI", 8, "bold"))
             x_curr += sent_w
 
         if pending_w > 0:
-            # Warm Cream for Pending
-            self.graph_canvas.create_rectangle(x_curr, 0, x_curr + pending_w, h, fill="#f4eee1", outline="")
+            # Dark Slate Grey for Pending
+            self.graph_canvas.create_rectangle(x_curr, 0, x_curr + pending_w, h, fill="#2c2c2c", outline="")
             if pending_w > 40:
-                self.graph_canvas.create_text(x_curr + pending_w // 2, h // 2, text=f"{pending}", fill="#2b261f", font=("Segoe UI", 8, "bold"))
+                self.graph_canvas.create_text(x_curr + pending_w // 2, h // 2, text=f"{pending}", fill="#ffffff", font=("Segoe UI", 8, "bold"))
             x_curr += pending_w
 
         if err_w > 0:
-            # Dark Slate for Errors/Skipped
-            self.graph_canvas.create_rectangle(x_curr, 0, w, h, fill="#766d62", outline="")
+            # Medium Grey for Errors/Skipped
+            self.graph_canvas.create_rectangle(x_curr, 0, w, h, fill="#555555", outline="")
             if err_w > 30:
                 self.graph_canvas.create_text(x_curr + err_w // 2, h // 2, text=f"{errors}", fill="#ffffff", font=("Segoe UI", 8, "bold"))
+
+        self.graph_legend_lbl.config(text=f"⬜ Sent: {sent}  |  ⬛ Pending: {pending}  |  ◽ Skipped/Errors: {errors}")
 
         legend_text = f"🟥 Sent: {sent} ({sent_pct*100:.0f}%)   |   ⬜ Pending: {pending} ({pending_pct*100:.0f}%)   |   ⚠️ Errors: {errors}"
         self.graph_legend_lbl.config(text=legend_text)
@@ -931,28 +929,29 @@ class ModernDarkZohoAutomationApp:
             self.subjects_file_path = path
             fname = os.path.basename(path)
             self.subj_status_lbl.config(
-                text=f"✓ Loaded {len(lines)} subjects from '{fname}' (Random selection active for each batch)",
-                foreground=self.accent_red
+                text=f"✓ Loaded {len(lines)} subjects from '{fname}' (Randomized per email)",
+                foreground="#ffffff"
             )
+            self.subj_entry.config(state="normal")
             self.subj_entry.delete(0, tk.END)
-            self.subj_entry.insert(0, f"[Randomized from {fname}: {len(lines)} subjects]")
+            self.subj_entry.insert(0, f"Loaded {len(lines)} subjects from '{fname}'")
             self.subj_entry.config(state="readonly")
             self.log(f"Loaded {len(lines)} subject line(s) from '{fname}'. Random picker enabled for each message.")
         except Exception as e:
             messagebox.showerror("Read Error", f"Unable to read subject file:\n{str(e)}")
 
     def clear_subject_pool(self):
-        """Resets subject line strategy back to default single template entry."""
+        """Clears subject pool."""
         self.subject_lines_pool = []
         self.subjects_file_path = None
         self.subj_entry.config(state="normal")
         self.subj_entry.delete(0, tk.END)
-        self.subj_entry.insert(0, DEFAULT_SUBJECT)
+        self.subj_entry.config(state="readonly")
         self.subj_status_lbl.config(
-            text="Default single template: {title}  (Upload a .txt file for 40 randomized subject lines)",
+            text="⚠️ Required: Upload a .txt file with subject lines (Randomly picked for every email)",
             foreground=self.fg_muted
         )
-        self.log("Reset subject lines to default template entry.")
+        self.log("Cleared subject lines pool.")
 
     def _load_template_file(self, idx: int):
         path = filedialog.askopenfilename(
@@ -1186,11 +1185,14 @@ class ModernDarkZohoAutomationApp:
             messagebox.showwarning("File Missing", "Please select an Excel workbook first.")
             return
 
-        # Check subject lines (either uploaded pool or text input)
+        # Check subject lines: Strictly required to be uploaded via .txt file
         subj_pool = list(self.subject_lines_pool) if self.subject_lines_pool else []
-        subj_tmpl = self.subj_entry.get().strip()
-        if not subj_pool and not subj_tmpl:
-            messagebox.showwarning("Missing Subject", "Please enter a subject line template (e.g. {title}) or upload a .txt subjects file.")
+        if not subj_pool:
+            messagebox.showwarning(
+                "Subject File Required",
+                "Please upload a .txt file containing subject lines using the '📄 Upload .txt Subjects' button.\n\n"
+                "The tool randomly selects a subject from this file for each email and does not use the title column."
+            )
             return
 
         # Gather all non-empty user templates across the 3 slots
@@ -1594,15 +1596,11 @@ class ModernDarkZohoAutomationApp:
 
                     chosen_body_tmpl = random.choice(body_tmpls)
 
-                    # Determine subject line: randomly choose from uploaded .txt pool if present, else template string
+                    # Determine subject line: randomly picked from the uploaded .txt pool (never uses title)
                     if subj_pool:
-                        raw_chosen_subj = random.choice(subj_pool)
+                        personalized_subject = random.choice(subj_pool)
                     else:
-                        raw_chosen_subj = subj_tmpl
-
-                    personalized_subject = raw_chosen_subj
-                    for ph, val in [("{title}", r_title), ("{name}", r_name), ("{TITLE}", r_title), ("{NAME}", r_name)]:
-                        personalized_subject = personalized_subject.replace(ph, val)
+                        personalized_subject = "Important Invitation & Inquiry"
 
                     # Generate formatted Times New Roman HTML with bolded {name} and {title}, plus clean plain text fallback
                     rich_body_html, plain_body_text = build_formatted_email_content(
