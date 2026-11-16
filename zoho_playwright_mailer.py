@@ -75,6 +75,10 @@ LOGO_PATH = os.path.join(BUNDLE_RESOURCE_DIR, "assets", "pulsus_logo.png")
 if not os.path.exists(LOGO_PATH):
     LOGO_PATH = os.path.join(BUNDLE_RESOURCE_DIR, "pulsus_logo.png")
 
+PAYMENT_QR_PATH = os.path.join(BUNDLE_RESOURCE_DIR, "assets", "payment_qr.jpg")
+if not os.path.exists(PAYMENT_QR_PATH):
+    PAYMENT_QR_PATH = os.path.join(APP_BASE_DIR, "assets", "payment_qr.jpg")
+
 # Default user-customizable templates for the 3 slots (Clean, professional text format matching exact spacing and alignment)
 SAMPLE_HTML_TEMPLATES = [
     """Dear [Author's Name],
@@ -302,6 +306,113 @@ if not os.path.exists(PROFILE_DIR):
         PROFILE_DIR = legacy_inst1
 os.makedirs(PROFILE_DIR, exist_ok=True)
 
+# =========================================================================
+# LICENSE & 30-DAY / 5-DAY COOLING PERIOD MANAGER
+# =========================================================================
+LICENSE_FILE = os.path.join(APP_BASE_DIR, ".mimicmail_license.dat")
+LICENSE_SECRET_KEY = "MIMIC_SECURE_AUTH_HASH_2026"
+ACTIVE_USAGE_WINDOW_SECONDS = 30 * 24 * 3600    # 30 days of active usage
+COOLING_WINDOW_SECONDS = 5 * 24 * 3600         # 5 days cooling window after which it restarts
+
+def _generate_license_sig(first_installed: float, cycle_count: int, unlock_expiry: float) -> str:
+    import hashlib
+    raw = f"{first_installed:.4f}:{cycle_count}:{unlock_expiry:.4f}:{LICENSE_SECRET_KEY}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+def get_license_state() -> dict:
+    """Returns license state: {is_blocked: bool, reason: str, days_left_in_cycle: float, cooling_days_left: float}"""
+    now = time.time()
+    state = {
+        "first_installed": now,
+        "cycle_count": 0,
+        "unlock_expiry": 0.0,
+        "tampered": False
+    }
+
+    if os.path.exists(LICENSE_FILE):
+        try:
+            import json
+            with open(LICENSE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            fi = float(data.get("first_installed", now))
+            cc = int(data.get("cycle_count", 0))
+            ue = float(data.get("unlock_expiry", 0.0))
+            sig = data.get("sig", "")
+            if _generate_license_sig(fi, cc, ue) == sig:
+                state["first_installed"] = fi
+                state["cycle_count"] = cc
+                state["unlock_expiry"] = ue
+            else:
+                state["tampered"] = True
+        except Exception:
+            state["tampered"] = True
+    else:
+        # First-ever run: initialize license file
+        save_license_state(now, 0, 0.0)
+
+    # Calculate cycle progression
+    cycle_length = ACTIVE_USAGE_WINDOW_SECONDS + COOLING_WINDOW_SECONDS # 35 days total
+    elapsed = max(0.0, now - state["first_installed"])
+
+    # If an administrative unlock key was applied and is still valid
+    if state["unlock_expiry"] > now:
+        return {
+            "is_blocked": False,
+            "status": "UNLOCKED",
+            "message": "Full License Active",
+            "days_left": (state["unlock_expiry"] - now) / 86400.0,
+            "cooling_days_left": 0.0
+        }
+
+    # Position within recurring (30 days active + 5 days cooling) cycle
+    cycle_offset = elapsed % cycle_length
+
+    if cycle_offset < ACTIVE_USAGE_WINDOW_SECONDS:
+        # Currently inside the 30-day active usage period
+        days_remaining = (ACTIVE_USAGE_WINDOW_SECONDS - cycle_offset) / 86400.0
+        return {
+            "is_blocked": False,
+            "status": "ACTIVE",
+            "message": f"Active Usage ({int(days_remaining)} days left)",
+            "days_left": days_remaining,
+            "cooling_days_left": 0.0
+        }
+    else:
+        # Currently inside the 5-day cooling period
+        cooling_remaining = (cycle_length - cycle_offset) / 86400.0
+        return {
+            "is_blocked": True,
+            "status": "COOLING",
+            "message": "Cooling Period Active (30-day usage completed)",
+            "days_left": 0.0,
+            "cooling_days_left": cooling_remaining
+        }
+
+def save_license_state(first_installed: float, cycle_count: int, unlock_expiry: float):
+    try:
+        import json
+        sig = _generate_license_sig(first_installed, cycle_count, unlock_expiry)
+        payload = {
+            "first_installed": first_installed,
+            "cycle_count": cycle_count,
+            "unlock_expiry": unlock_expiry,
+            "sig": sig
+        }
+        with open(LICENSE_FILE, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+    except Exception as e:
+        print(f"License save warning: {e}")
+
+def apply_admin_unlock(code: str) -> bool:
+    """Admin passcodes to extend or immediately bypass cooling period."""
+    clean = code.strip().upper()
+    if clean in ("NITRO2026", "MIMIC30FREE", "KARTHIKPAY"):
+        now = time.time()
+        # Extend by 30 days from now
+        save_license_state(now, 0, now + (30 * 86400))
+        return True
+    return False
+
 class ModernDarkZohoAutomationApp:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -326,6 +437,7 @@ class ModernDarkZohoAutomationApp:
         self._build_ui()
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.root.after(800, self._check_cooling_period_status)
 
     def _ensure_worker_started(self):
         if not self.worker_thread or not self.worker_thread.is_alive():
@@ -459,9 +571,9 @@ class ModernDarkZohoAutomationApp:
         self.ecg_step = 0
         self._animate_ecg_heartbeat()
 
-        badge_lbl = tk.Label(badge_content, text="AUTOMATION PLATFORM", bg="#fdf2f3", fg=self.accent_red,
+        self.badge_lbl = tk.Label(badge_content, text="AUTOMATION PLATFORM", bg="#fdf2f3", fg=self.accent_red,
                              font=("Segoe UI", 8, "bold"))
-        badge_lbl.pack(side=tk.LEFT, padx=(0, 4))
+        self.badge_lbl.pack(side=tk.LEFT, padx=(0, 4))
 
         # =========================================================================
         # 2. TWO-COLUMN MAIN BODY (Left: Session & Templates | Right: Status & Actions)
@@ -923,7 +1035,99 @@ class ModernDarkZohoAutomationApp:
             )
             self.log(f"⚠️ Excel parse error on '{os.path.basename(path)}': {str(e)}")
 
+    def _check_cooling_period_status(self):
+        lic = get_license_state()
+        if lic["is_blocked"]:
+            self.badge_lbl.config(text=f"COOLING ({int(lic['cooling_days_left'])}d)", fg="#ffffff", bg="#c0392b")
+            self.show_payment_cooling_dialog(lic)
+        else:
+            if lic.get("status") == "UNLOCKED":
+                self.badge_lbl.config(text="FULL LICENSE", fg="#27ae60")
+            else:
+                self.badge_lbl.config(text=f"ACTIVE ({int(lic['days_left'])}d)", fg=self.accent_red)
+
+    def show_payment_cooling_dialog(self, lic: dict = None):
+        """Displays modal payment QR window when 30 days active usage expires."""
+        if not lic:
+            lic = get_license_state()
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title("MimicMail — Usage Cooling & Renewal Period")
+        dlg.geometry("450x640")
+        dlg.resizable(False, False)
+        dlg.configure(bg="#000000")
+        dlg.transient(self.root)
+        dlg.grab_set()
+
+        # Center on parent window
+        try:
+            x = self.root.winfo_x() + (self.root.winfo_width() // 2) - 225
+            y = self.root.winfo_y() + (self.root.winfo_height() // 2) - 320
+            dlg.geometry(f"+{x}+{y}")
+        except Exception:
+            pass
+
+        # Title & Cooling Banner
+        top_bar = tk.Frame(dlg, bg="#111111", pady=10)
+        top_bar.pack(fill=tk.X)
+
+        tk.Label(top_bar, text="⏳ 30-Day Usage Window Completed", fg="#e74c3c", bg="#111111", font=("Segoe UI", 12, "bold")).pack()
+        cooling_days = max(1, int(lic.get("cooling_days_left", 5)))
+        tk.Label(top_bar, text=f"Tool is in a 5-day cooling period ({cooling_days} day(s) remaining).\nScan PhonePe QR below or enter verification code to unlock immediately.",
+                 fg="#cccccc", bg="#111111", font=("Segoe UI", 9), justify=tk.CENTER).pack(pady=(4, 0))
+
+        # QR Image Display Canvas / Label
+        qr_frame = tk.Frame(dlg, bg="#000000", pady=6)
+        qr_frame.pack(fill=tk.BOTH, expand=True)
+
+        if os.path.exists(PAYMENT_QR_PATH):
+            try:
+                from PIL import Image, ImageTk
+                pil_img = Image.open(PAYMENT_QR_PATH)
+                # Resize keeping aspect ratio
+                pil_img.thumbnail((320, 390), Image.Resampling.LANCZOS)
+                self.payment_qr_photo = ImageTk.PhotoImage(pil_img)
+                qr_lbl = tk.Label(qr_frame, image=self.payment_qr_photo, bg="#000000")
+                qr_lbl.pack(pady=4)
+            except Exception as img_err:
+                tk.Label(qr_frame, text=f"PhonePe QR: MADIPALLI KARTHIK\n(Image error: {img_err})", fg="#ffffff", bg="#000000").pack(pady=20)
+        else:
+            tk.Label(qr_frame, text="PhonePe Payment Accepted Here\n\nMADIPALLI KARTHIK\nScan & Pay Using PhonePe App",
+                     fg="#ffffff", bg="#000000", font=("Segoe UI", 12, "bold"), justify=tk.CENTER).pack(pady=40)
+
+        # Bottom Unlock Code Entry & Actions
+        action_frame = tk.Frame(dlg, bg="#111111", pady=12, padx=16)
+        action_frame.pack(fill=tk.X, side=tk.BOTTOM)
+
+        code_row = tk.Frame(action_frame, bg="#111111")
+        code_row.pack(fill=tk.X, pady=(0, 8))
+
+        tk.Label(code_row, text="Activation Code:", fg="#aaaaaa", bg="#111111", font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        code_entry = tk.Entry(code_row, bg="#222222", fg="#ffffff", insertbackground="#ffffff", font=("Segoe UI", 10), width=16)
+        code_entry.pack(side=tk.LEFT, padx=(8, 8))
+
+        def try_unlock():
+            code = code_entry.get().strip()
+            if apply_admin_unlock(code):
+                messagebox.showinfo("Success", "✓ License renewed successfully! Full tool functionality restored for 30 days.")
+                dlg.destroy()
+                self._check_cooling_period_status()
+            else:
+                messagebox.showerror("Invalid Code", "The activation code entered is invalid. Please complete payment via PhonePe or check your key.")
+
+        unlock_btn = tk.Button(code_row, text="Unlock Now", bg="#27ae60", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", padx=10, command=try_unlock)
+        unlock_btn.pack(side=tk.LEFT)
+
+        close_btn = tk.Button(action_frame, text="Continue in Cooling Mode (Wait 5 Days)", bg="#333333", fg="#dddddd", font=("Segoe UI", 8), relief="flat", command=dlg.destroy)
+        close_btn.pack(side=tk.RIGHT)
+
     def request_start_automation(self):
+        lic = get_license_state()
+        if lic["is_blocked"]:
+            self.show_payment_cooling_dialog(lic)
+            self.log("⚠️ Outreach dispatch paused: Tool is in its 5-day cooling period after 30 days of active usage.")
+            return
+
         if not self.excel_file_path or not os.path.exists(self.excel_file_path):
             messagebox.showwarning("File Missing", "Please select an Excel workbook first.")
             return
