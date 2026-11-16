@@ -128,12 +128,13 @@ def clean_to_plain_text(s: str) -> str:
     # Normalize multiple blank lines to double newlines
     return re.sub(r'\n{3,}', '\n\n', '\n'.join(lines)).strip()
 
-def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, r_email: str):
+def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, r_email: str, include_optout: bool = True):
     """
     Builds both:
     1. Rich HTML strictly rendered in Times New Roman (12pt), perfectly left-aligned,
        with auto-readjusted paragraph spacing, with '{name}', '{title}', 'Dear Dr' / salutations,
        and 'Best regards' / sign-offs bolded.
+       Also appends a subtle, professional opt-out footer to maintain 100% spam compliance.
     2. Clean plain text fallback.
     """
     import re
@@ -288,6 +289,15 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         p_tags.append(
             f'<p align="left" style="text-align: left !important; margin: 20px 0 0 0 !important; padding: 0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{c_inner}</p>'
         )
+
+    # 4. Professional Compliance & Deliverability Opt-Out (protects domain reputation & spam score)
+    if include_optout:
+        p_tags.append(
+            '<p align="left" style="text-align: left !important; margin: 28px 0 0 0 !important; padding: 10px 0 0 0 !important; border-top: 1px solid #e0e0e0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 9pt !important; color: #777777 !important; line-height: 1.3 !important;">'
+            '<em>If you do not wish to receive future communications regarding this initiative, simply reply with "Unsubscribe" and your address will be promptly removed.</em>'
+            '</p>'
+        )
+        plain_text += '\n\n---\nIf you do not wish to receive future communications regarding this initiative, simply reply with "Unsubscribe" and your address will be promptly removed.'
 
     rich_html = (
         '<div style="font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important; margin: 0; padding: 0;">\n'
@@ -712,6 +722,20 @@ class ModernDarkZohoAutomationApp:
         self.tabs_spin = ttk.Spinbox(tab_row, from_=1, to=2, textvariable=self.tabs_var, width=5, state="readonly")
         self.tabs_spin.pack(side=tk.RIGHT)
         ttk.Label(pacing_box, text="(Hardware-safe concurrency: 1 or 2 tabs)", style="DarkMuted.TLabel").pack(anchor=tk.W)
+
+        # Deliverability & Spam Guard Options
+        guard_box = tk.Frame(action_card, bg="#ffffff", pady=4)
+        guard_box.pack(fill=tk.X, pady=(4, 0))
+
+        self.optout_var = tk.BooleanVar(value=True)
+        self.optout_check = ttk.Checkbutton(guard_box, text="Include Safe Opt-Out Footer (High Deliverability)",
+                                            variable=self.optout_var, style="Dark.TCheckbutton")
+        self.optout_check.pack(anchor=tk.W)
+
+        self.dedup_var = tk.BooleanVar(value=True)
+        self.dedup_check = ttk.Checkbutton(guard_box, text="Deduplicate Recipient Emails (Prevent Repeat Spams)",
+                                           variable=self.dedup_var, style="Dark.TCheckbutton")
+        self.dedup_check.pack(anchor=tk.W)
 
         # Section: LIVE STATUS & GRAPH
         status_card = ttk.LabelFrame(right_col, text="  4. Delivery Status & Graph  ", style="DarkCard.TLabelframe", padding="14")
@@ -1166,7 +1190,9 @@ class ModernDarkZohoAutomationApp:
             "base_mins": self.interval_var.get(),
             "use_jitter": self.jitter_var.get(),
             "excel_path": self.excel_file_path,
-            "parallel_tabs": max(1, self.tabs_var.get())
+            "parallel_tabs": max(1, self.tabs_var.get()),
+            "include_optout": self.optout_var.get(),
+            "deduplicate_emails": self.dedup_var.get()
         }
         self._ensure_worker_started()
         self.cmd_queue.put(("START_AUTOMATION", params))
@@ -1431,6 +1457,10 @@ class ModernDarkZohoAutomationApp:
         use_jitter = params["use_jitter"]
         parallel_tabs = params.get("parallel_tabs", 1)
 
+        include_optout = params.get("include_optout", True)
+        deduplicate_emails = params.get("deduplicate_emails", True)
+        seen_emails_in_session = set()
+
         BATCH_CAP = 40
         ONE_HOUR_REST_SEC = 3600  # 1 hour interval between chunks of 40 emails
         total_session_sent = 0
@@ -1520,6 +1550,14 @@ class ModernDarkZohoAutomationApp:
                         mark_excel_row_status(excel_path, r_idx, "INVALID_EMAIL")
                         continue
 
+                    # Deduplication guard: Never email the same address twice in a single session
+                    clean_email_lower = r_email.strip().lower()
+                    if deduplicate_emails and clean_email_lower in seen_emails_in_session:
+                        self.log(f"Row {r_idx + 1}: SKIPPED (Duplicate address '{r_email}' already reached in this run)")
+                        mark_excel_row_status(excel_path, r_idx, "SKIPPED_DUPLICATE")
+                        continue
+                    seen_emails_in_session.add(clean_email_lower)
+
                     chosen_body_tmpl = random.choice(body_tmpls)
 
                     # Determine subject line: randomly choose from uploaded .txt pool if present, else template string
@@ -1537,7 +1575,8 @@ class ModernDarkZohoAutomationApp:
                         raw_template=chosen_body_tmpl,
                         r_name=r_name,
                         r_title=r_title,
-                        r_email=r_email
+                        r_email=r_email,
+                        include_optout=include_optout
                     )
 
                     tab_label = f"Tab {tab_idx + 1}" if len(tab_pool) > 1 else "Primary"
