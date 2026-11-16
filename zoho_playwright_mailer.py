@@ -723,6 +723,21 @@ class ModernDarkZohoAutomationApp:
         self.tabs_spin.pack(side=tk.RIGHT)
         ttk.Label(pacing_box, text="(Hardware-safe concurrency: 1 or 2 tabs)", style="DarkMuted.TLabel").pack(anchor=tk.W)
 
+        # 40-Mail Chunk Rest Interval Selector (1 hr, 1.5 hr, 2 hr, 3 hr)
+        chunk_rest_row = ttk.Frame(pacing_box, style="Card.TFrame")
+        chunk_rest_row.pack(fill=tk.X, pady=(6, 2))
+        ttk.Label(chunk_rest_row, text="💤 Rest After 40 Mails:", style="Dark.TLabel").pack(side=tk.LEFT)
+        self.chunk_rest_hours_var = tk.DoubleVar(value=1.5)
+        self.chunk_rest_combo = ttk.Combobox(
+            chunk_rest_row,
+            textvariable=self.chunk_rest_hours_var,
+            values=[1.0, 1.5, 2.0, 2.5, 3.0],
+            state="readonly",
+            width=6
+        )
+        self.chunk_rest_combo.pack(side=tk.RIGHT)
+        ttk.Label(pacing_box, text="Hours between 40-mail waves (Recommended: 1.5 - 2 hrs for 250 mails)", style="DarkMuted.TLabel").pack(anchor=tk.W)
+
         # Deliverability & Spam Guard Options
         guard_box = tk.Frame(action_card, bg="#ffffff", pady=4)
         guard_box.pack(fill=tk.X, pady=(4, 0))
@@ -1192,7 +1207,8 @@ class ModernDarkZohoAutomationApp:
             "excel_path": self.excel_file_path,
             "parallel_tabs": max(1, self.tabs_var.get()),
             "include_optout": self.optout_var.get(),
-            "deduplicate_emails": self.dedup_var.get()
+            "deduplicate_emails": self.dedup_var.get(),
+            "chunk_rest_hours": max(1.0, float(self.chunk_rest_hours_var.get()))
         }
         self._ensure_worker_started()
         self.cmd_queue.put(("START_AUTOMATION", params))
@@ -1461,8 +1477,9 @@ class ModernDarkZohoAutomationApp:
         deduplicate_emails = params.get("deduplicate_emails", True)
         seen_emails_in_session = set()
 
+        chunk_rest_hours = params.get("chunk_rest_hours", 1.5)
+        CHUNK_REST_SEC = int(chunk_rest_hours * 3600)  # Configurable cooldown (1.0 to 3.0 hrs)
         BATCH_CAP = 40
-        ONE_HOUR_REST_SEC = 3600  # 1 hour interval between chunks of 40 emails
         total_session_sent = 0
 
         # Loop through batches of 40 until all rows in the Excel spreadsheet are completed
@@ -1659,21 +1676,21 @@ class ModernDarkZohoAutomationApp:
                 self.root.after(0, lambda s=total_session_sent: messagebox.showinfo("Completed", f"All spreadsheet records have been successfully sent!\nTotal sent: {s}"))
                 return
 
-            # 3. Mandatory cooldown: At least 1 hour (3600 seconds) rest interval between each 40-mail chunk
-            self.log(f"Chunk cap reached (40 emails dispatched). Enforcing mandatory 1-hour cooldown interval ({remaining_unprocessed} rows remaining)...")
-            wait_remaining = ONE_HOUR_REST_SEC
+            # 3. Mandatory cooldown: Configurable rest interval (default: 1.5 - 2 hrs) between each 40-mail chunk
+            self.log(f"Chunk cap reached (40 emails dispatched). Enforcing {chunk_rest_hours:.1f}-hour cooldown interval ({remaining_unprocessed} rows remaining)...")
+            wait_remaining = CHUNK_REST_SEC
             while wait_remaining > 0 and not self.stop_requested:
                 hrs, rem = divmod(wait_remaining, 3600)
                 mins, secs = divmod(rem, 60)
                 time_str = f"{hrs:02d}:{mins:02d}:{secs:02d}"
-                self.root.after(0, lambda ts=time_str: self.timer_display.config(
-                    text=f"⏳ 1-Hr Interval: Next 40 in {ts}", fg="#e67e22"
+                self.root.after(0, lambda ts=time_str, crh=chunk_rest_hours: self.timer_display.config(
+                    text=f"⏳ {crh:.1f}-Hr Interval: Next 40 in {ts}", fg="#e67e22"
                 ))
                 time.sleep(1)
                 wait_remaining -= 1
 
             if not self.stop_requested:
-                self.log("1-hour interval completed. Resuming next chunk of 40 emails...")
+                self.log(f"{chunk_rest_hours:.1f}-hour cooldown completed. Resuming next chunk of 40 emails...")
 
             batch_number += 1
 
