@@ -736,23 +736,22 @@ class ModernDarkZohoAutomationApp:
             width=6
         )
         self.chunk_rest_combo.pack(side=tk.RIGHT)
-        ttk.Label(pacing_box, text="Hours between 40-mail waves (Recommended: 1.5 - 2.0 hrs for 150 mails)", style="DarkMuted.TLabel").pack(anchor=tk.W)
+        ttk.Label(pacing_box, text="Hours between 40-mail waves (Recommended: 1.5 - 2.0 hrs)", style="DarkMuted.TLabel").pack(anchor=tk.W)
 
-        # Session Hard Cap (Default: 150 emails)
-        max_cap_row = ttk.Frame(pacing_box, style="Card.TFrame")
-        max_cap_row.pack(fill=tk.X, pady=(6, 2))
-        ttk.Label(max_cap_row, text="🎯 Daily / Session Mail Cap:", style="Dark.TLabel").pack(side=tk.LEFT)
-        self.max_session_cap_var = tk.IntVar(value=150)
-        self.max_session_spin = ttk.Spinbox(
-            max_cap_row,
-            from_=40,
-            to=500,
-            increment=10,
-            textvariable=self.max_session_cap_var,
+        # Max Session Cap Selector (Default: 150 emails)
+        cap_row = ttk.Frame(pacing_box, style="Card.TFrame")
+        cap_row.pack(fill=tk.X, pady=(6, 2))
+        ttk.Label(cap_row, text="🎯 Daily / Session Cap:", style="Dark.TLabel").pack(side=tk.LEFT)
+        self.session_cap_var = tk.IntVar(value=150)
+        self.session_cap_combo = ttk.Combobox(
+            cap_row,
+            textvariable=self.session_cap_var,
+            values=[50, 100, 120, 150, 200, 250],
+            state="readonly",
             width=6
         )
-        self.max_session_spin.pack(side=tk.RIGHT)
-        ttk.Label(pacing_box, text="(Safety threshold: stops automatically after 150 mails)", style="DarkMuted.TLabel").pack(anchor=tk.W)
+        self.session_cap_combo.pack(side=tk.RIGHT)
+        ttk.Label(pacing_box, text="Max emails per session (Set to 150 for optimal inbox safety)", style="DarkMuted.TLabel").pack(anchor=tk.W)
 
         # Deliverability & Spam Guard Options
         guard_box = tk.Frame(action_card, bg="#ffffff", pady=4)
@@ -1225,7 +1224,7 @@ class ModernDarkZohoAutomationApp:
             "include_optout": self.optout_var.get(),
             "deduplicate_emails": self.dedup_var.get(),
             "chunk_rest_hours": max(1.0, float(self.chunk_rest_hours_var.get())),
-            "max_session_cap": max(1, int(self.max_session_cap_var.get()))
+            "max_session_cap": max(1, int(self.session_cap_var.get()))
         }
         self._ensure_worker_started()
         self.cmd_queue.put(("START_AUTOMATION", params))
@@ -1495,9 +1494,9 @@ class ModernDarkZohoAutomationApp:
         seen_emails_in_session = set()
 
         chunk_rest_hours = params.get("chunk_rest_hours", 1.5)
+        max_session_cap = params.get("max_session_cap", 150)
         CHUNK_REST_SEC = int(chunk_rest_hours * 3600)  # Configurable cooldown (1.0 to 3.0 hrs)
         BATCH_CAP = 40
-        max_session_cap = params.get("max_session_cap", 150)
         total_session_sent = 0
 
         # Loop through batches of 40 until all rows in the Excel spreadsheet are completed
@@ -1535,21 +1534,10 @@ class ModernDarkZohoAutomationApp:
                     self.root.after(0, lambda s=total_session_sent: messagebox.showinfo("Outreach Complete", f"All data in spreadsheet completed!\nTotal dispatched in this session: {s}"))
                 return
 
-            # Determine how many mails can still be dispatched without exceeding the session cap (default 150)
-            remaining_cap = max_session_cap - total_session_sent
-            if remaining_cap <= 0:
-                self.log(f"🎯 Daily/Session cap reached ({max_session_cap} emails sent)! Safely halting outreach to protect domain reputation.")
-                self.root.after(0, lambda s=total_session_sent: messagebox.showinfo(
-                    "Session Cap Reached",
-                    f"Outreach target completed!\n\nDispatched {s} emails in this session.\nSpreadsheet is safely saved."
-                ))
-                return
-
-            current_batch_limit = min(BATCH_CAP, remaining_cap)
-            target_indices = pending_indices[:current_batch_limit]
+            target_indices = pending_indices[:BATCH_CAP]
             total_in_batch = len(target_indices)
 
-            self.log(f"=== Starting Chunk {batch_number}: {total_in_batch} recipients (Session progress: {total_session_sent}/{max_session_cap} | Pending in file: {len(pending_indices)}) ===")
+            self.log(f"=== Starting Chunk {batch_number}: {total_in_batch} recipients (Remaining pending: {len(pending_indices)}) ===")
             if subj_pool:
                 self.log(f"Using pool of {len(subj_pool)} uploaded subject lines with random selection per mail.")
 
@@ -1688,15 +1676,16 @@ class ModernDarkZohoAutomationApp:
             if self.stop_requested:
                 break
 
-            # 2. Check if more rows remain to be sent and if session cap reached
+            # 2. Check if maximum session cap (e.g. 150 emails) has been reached
             if total_session_sent >= max_session_cap:
-                self.log(f"🎯 Daily/Session cap reached ({max_session_cap} emails dispatched)! Automatically completing session.")
-                self.root.after(0, lambda s=total_session_sent: messagebox.showinfo(
-                    "Session Complete",
-                    f"Outreach cap reached!\n\nDispatched {s} emails safely.\nSpreadsheet is synchronized."
+                self.log(f"🎯 Target session cap of {max_session_cap} emails reached! Halting to protect inbox sender reputation.")
+                self.root.after(0, lambda s=total_session_sent, c=max_session_cap: messagebox.showinfo(
+                    "Target Cap Reached",
+                    f"✓ Reached safety cap of {s} / {c} emails for this session!\n\nSpreadsheet has been synchronized. Next batch can be safely run tomorrow."
                 ))
                 return
 
+            # 3. Check if more rows remain to be sent
             try:
                 df_check = pd.read_excel(excel_path)
                 has_sc = any(c.strip().lower() == "status" for c in df_check.columns)
@@ -1713,8 +1702,8 @@ class ModernDarkZohoAutomationApp:
                 self.root.after(0, lambda s=total_session_sent: messagebox.showinfo("Completed", f"All spreadsheet records have been successfully sent!\nTotal sent: {s}"))
                 return
 
-            # 3. Mandatory cooldown: Configurable rest interval (default: 1.5 - 2 hrs) between each 40-mail chunk
-            self.log(f"Chunk cap reached (Dispatched in wave: {sent_in_batch} | Session total: {total_session_sent}/{max_session_cap}). Enforcing {chunk_rest_hours:.1f}-hour cooldown interval ({remaining_unprocessed} rows remaining in file)...")
+            # 4. Mandatory cooldown: Configurable rest interval (default: 1.5 - 2 hrs) between each 40-mail chunk
+            self.log(f"Chunk cap reached (40 emails dispatched). Enforcing {chunk_rest_hours:.1f}-hour cooldown interval ({remaining_unprocessed} rows remaining)...")
             wait_remaining = CHUNK_REST_SEC
             while wait_remaining > 0 and not self.stop_requested:
                 hrs, rem = divmod(wait_remaining, 3600)
