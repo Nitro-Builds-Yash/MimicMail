@@ -108,8 +108,8 @@ playwright install chromium
 python zoho_playwright_mailer.py
 ```
 
-#### Hardware-Optimized Concurrency (Optimized for 4 GB – 8 GB RAM):
-- **Dual Instances (Card 1):** Configured for **2 simultaneous instances** (`Instance 1` and `Instance 2`). Click the **`➕ Launch 2nd Instance`** button to open the counterpart window on-demand with isolated session cookies.
+#### Dispatch & Safety:
+- **Single Unified Application:** Clean and focused single-application interface with persistent profile sessions.
 - **Background Parallel Tabs (Card 3):** Set **`⚡ Parallel Background Tabs`** (`1` or `2`). Dispatches in parallel waves while safeguarding browser memory and CPU resources.
 
 ### 2. Connect Zoho Webmail
