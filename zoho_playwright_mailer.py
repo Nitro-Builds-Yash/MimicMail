@@ -200,9 +200,9 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     title_escaped = escape(r_title)
     email_escaped = escape(r_email)
 
-    bold_style = "font-family: 'Times New Roman', Times, serif !important; font-weight: bold !important; font-size: 12pt !important;"
-    bold_name = f"<b class=\"bold-field\" style=\"{bold_style}\">{name_escaped}</b>"
-    bold_title = f"<b class=\"bold-field\" style=\"{bold_style}\">{title_escaped}</b>"
+    bold_style = "font-family: 'Times New Roman', Times, serif; font-weight: bold; font-size: 16px; color: #000000;"
+    bold_name = f"<b style=\"{bold_style}\"><font face=\"Times New Roman, Times, serif\" color=\"#000000\">{name_escaped}</font></b>"
+    bold_title = f"<b style=\"{bold_style}\"><font face=\"Times New Roman, Times, serif\" color=\"#000000\">{title_escaped}</font></b>"
 
     html_content = escaped_template
     for ph in name_placeholders:
@@ -215,7 +215,7 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     # Automatically detect and bold salutations: "Dear Dr.", "Dear Dr", "Dear Professor", "Dear Prof.", "Dear"
     def bold_salutation(m):
         txt = m.group(1)
-        return f'<b class="bold-field" style="{bold_style}">{txt}</b>'
+        return f'<b style="{bold_style}"><font face="Times New Roman, Times, serif" color="#000000">{txt}</font></b>'
 
     html_content = re.sub(
         r'(?i)\b(Dear\s+(?:Dr\.?|Doctor|Prof\.?|Professor|Mr\.?|Ms\.?|Mrs\.?|))(?=\s|<|\b)',
@@ -224,10 +224,9 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     )
 
     # Automatically detect and bold complimentary sign-offs:
-    # "Best regards,", "Warm regards,", "Kind regards,", "With regards,", "Regards,", "Sincerely,", "Sincerely yours,"
     def bold_closing(m):
         txt = m.group(1)
-        return f'<b class="bold-field" style="{bold_style}">{txt}</b>'
+        return f'<b style="{bold_style}"><font face="Times New Roman, Times, serif" color="#000000">{txt}</font></b>'
 
     html_content = re.sub(
         r'(?i)\b(Best\s+regards|Warm\s+regards|Kind\s+regards|With\s+regards|Regards|Sincerely(?:\s+yours)?)\b',
@@ -296,43 +295,75 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
             paragraph_text = " ".join(bb)
             final_body_blocks.append(paragraph_text)
 
-    p_tags = []
+    # Reconstruct blocks into bulletproof table rows
+    table_rows = []
+    td_style = (
+        "padding: 0 0 16px 0; "
+        "margin: 0; "
+        "font-family: 'Times New Roman', Times, Georgia, serif; "
+        "font-size: 16px; "
+        "color: #000000; "
+        "line-height: 1.5; "
+        "text-align: left;"
+    )
 
-    # 1. Salutation (always left-aligned with 0 top margin, 12px bottom margin)
+    # 1. Salutation
     if salutation_block:
         s_inner = "<br>\n".join(salutation_block)
-        p_tags.append(
-            f'<div align="left" style="text-align: left !important; margin: 0 0 14px 0 !important; padding: 0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;"><font face="Times New Roman, serif" size="3" color="#000000">{s_inner}</font></div>'
+        table_rows.append(
+            f'<tr><td align="left" style="{td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000;">{s_inner}</span></font></td></tr>'
         )
 
-    # 2. Body Paragraphs (clean left-aligned, natural line spacing, no text stretching)
+    # 2. Body Paragraphs
     for b_para in final_body_blocks:
         if not b_para.strip():
             continue
-        p_tags.append(
-            f'<div align="left" style="text-align: left !important; margin: 0 0 14px 0 !important; padding: 0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;"><font face="Times New Roman, serif" size="3" color="#000000">{b_para.strip()}</font></div>'
+        table_rows.append(
+            f'<tr><td align="left" style="{td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000; line-height: 1.5;">{b_para.strip()}</span></font></td></tr>'
         )
 
-    # 3. Closing & Sign-off Block (always left-aligned with clean spacing before Best regards)
+    # 3. Closing & Sign-off Block
     if closing_block:
         c_inner = "<br>\n".join(closing_block)
-        p_tags.append(
-            f'<div align="left" style="text-align: left !important; margin: 18px 0 0 0 !important; padding: 0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;"><font face="Times New Roman, serif" size="3" color="#000000">{c_inner}</font></div>'
+        closing_td_style = (
+            "padding: 8px 0 0 0; "
+            "margin: 0; "
+            "font-family: 'Times New Roman', Times, Georgia, serif; "
+            "font-size: 16px; "
+            "color: #000000; "
+            "line-height: 1.5; "
+            "text-align: left;"
+        )
+        table_rows.append(
+            f'<tr><td align="left" style="{closing_td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000;">{c_inner}</span></font></td></tr>'
         )
 
-    # 4. Professional Compliance & Deliverability Opt-Out (protects domain reputation & spam score)
+    # 4. Professional Compliance Opt-Out Footer
     if include_optout:
-        p_tags.append(
-            '<div align="left" style="text-align: left !important; margin: 24px 0 0 0 !important; padding: 10px 0 0 0 !important; border-top: 1px solid #e0e0e0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 9pt !important; color: #777777 !important; line-height: 1.3 !important;"><font face="Times New Roman, serif" size="2" color="#777777">'
-            '<em>If you do not wish to receive future communications regarding this initiative, simply reply with "Unsubscribe" and your address will be promptly removed.</em>'
-            '</font></div>'
+        optout_td_style = (
+            "padding: 22px 0 0 0; "
+            "margin: 0; "
+            "border-top: 1px solid #e0e0e0; "
+            "font-family: 'Times New Roman', Times, Georgia, serif; "
+            "font-size: 12px; "
+            "color: #777777; "
+            "line-height: 1.3; "
+            "text-align: left;"
+        )
+        table_rows.append(
+            f'<tr><td align="left" style="{optout_td_style}"><font face="Times New Roman, Times, serif" size="2" color="#777777"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 12px; color: #777777;"><em>If you do not wish to receive future communications regarding this initiative, simply reply with "Unsubscribe" and your address will be promptly removed.</em></span></font></td></tr>'
         )
         plain_text += '\n\n---\nIf you do not wish to receive future communications regarding this initiative, simply reply with "Unsubscribe" and your address will be promptly removed.'
 
+    rows_html = "\n".join(table_rows)
+
     rich_html = (
-        '<div class="zmMailBody" style="font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important; text-align: left !important; margin: 0; padding: 0;">\n'
-        + "\n".join(p_tags) +
-        '\n</div>'
+        '<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" '
+        'style="border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; '
+        'font-family: \'Times New Roman\', Times, Georgia, serif; font-size: 16px; color: #000000; line-height: 1.5; '
+        'margin: 0; padding: 0; text-align: left; background-color: transparent;">\n'
+        f'{rows_html}\n'
+        '</table>'
     )
 
     return rich_html, plain_text
@@ -1912,7 +1943,7 @@ class ModernDarkZohoAutomationApp:
         self.log(f"Inserting formatted email body in Times New Roman with bold name & title...")
         filled_body = False
 
-        # Try rich clipboard paste / insertHTML inside iframe first
+        # Try rich injection inside iframe first
         for frame in page.frames:
             try:
                 body_elem = frame.query_selector("body[contenteditable='true'], body")
@@ -1927,102 +1958,30 @@ class ModernDarkZohoAutomationApp:
                         """(html) => {
                             try {
                                 document.body.focus();
-                                let styleEl = document.getElementById('mimicmail-style-override');
-                                if (!styleEl) {
-                                    styleEl = document.createElement('style');
-                                    styleEl.id = 'mimicmail-style-override';
-                                    document.head ? document.head.appendChild(styleEl) : document.body.appendChild(styleEl);
-                                }
-                                styleEl.textContent = `
-                                    body, div, p, span, font, b, strong, a, em {
-                                        font-family: 'Times New Roman', Times, serif !important;
-                                        font-size: 12pt !important;
-                                        text-align: left !important;
-                                    }
-                                    div, p {
-                                        margin: 0 0 14px 0;
-                                        line-height: 1.5;
-                                    }
-                                `;
-
-                                document.body.style.setProperty('text-align', 'left', 'important');
-                                document.body.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
-                                document.body.style.setProperty('font-size', '12pt', 'important');
-                                document.body.style.setProperty('color', '#000000', 'important');
-                                document.body.style.setProperty('line-height', '1.5', 'important');
-                                document.body.style.setProperty('margin', '0', 'important');
-                                document.body.style.setProperty('padding', '0', 'important');
-
-                                const sel = window.getSelection();
-                                const range = document.createRange();
-                                range.selectNodeContents(document.body);
-                                sel.removeAllRanges();
-                                sel.addRange(range);
-
-                                // Try standard insertHTML
                                 let ok = document.execCommand('insertHTML', false, html);
                                 if (!ok || !document.body.innerHTML.trim() || document.body.innerText.trim().length === 0) {
                                     document.body.innerHTML = html;
                                 }
 
-                                // Remove any unwanted leading empty elements/br that create blank lines before Dear Dr
-                                while (document.body.firstChild) {
-                                    const fc = document.body.firstChild;
-                                    const tag = (fc.nodeName || '').toLowerCase();
-                                    const txt = (fc.textContent || '').replace(/[\\u200B-\\u200D\\uFEFF\\s]/g, '');
-                                    if (tag === 'br' || (['p', 'div'].includes(tag) && txt === '')) {
-                                        document.body.removeChild(fc);
-                                    } else {
-                                        break;
-                                    }
-                                }
+                                // Native document font and formatting enforcement
+                                document.execCommand('selectAll', false, null);
+                                document.execCommand('fontName', false, 'Times New Roman');
+                                document.execCommand('fontSize', false, '3');
+                                document.execCommand('justifyLeft', false, null);
 
-                                // Apply styling across p, div, and block containers
-                                const blocks = document.body.querySelectorAll('p, div');
-                                blocks.forEach(el => {
-                                    if (el === document.body) return;
-                                    if (el.querySelector('p, div')) return;
+                                const sel = window.getSelection();
+                                if (sel) sel.removeAllRanges();
 
-                                    const text = (el.innerText || el.textContent || '').trim();
-                                    if (!text) return;
+                                document.body.style.setProperty('text-align', 'left', 'important');
+                                document.body.style.setProperty('font-family', "'Times New Roman', Times, Georgia, serif", 'important');
+                                document.body.style.setProperty('font-size', '16px', 'important');
+                                document.body.style.setProperty('color', '#000000', 'important');
+                                document.body.style.setProperty('line-height', '1.5', 'important');
 
-                                    el.setAttribute('align', 'left');
-                                    el.style.setProperty('text-align', 'left', 'important');
-                                    el.style.setProperty('padding', '0', 'important');
-                                    el.style.setProperty('line-height', '1.5', 'important');
-                                    el.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
-                                    el.style.setProperty('font-size', '12pt', 'important');
-
-                                    const firstLine = text.split('\\n')[0].trim();
-                                    const isSalutation = /^(?:dear|hello|hi|greetings)/i.test(firstLine);
-                                    const isClosing = /^(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(firstLine) ||
-                                                      /(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(text);
-
-                                    if (isClosing) {
-                                        el.style.setProperty('margin-top', '18px', 'important');
-                                        el.style.setProperty('margin-bottom', '0', 'important');
-                                    } else if (isSalutation) {
-                                        el.style.setProperty('margin-top', '0', 'important');
-                                        el.style.setProperty('margin-bottom', '14px', 'important');
-                                    } else {
-                                        el.style.setProperty('margin-top', '0', 'important');
-                                        el.style.setProperty('margin-bottom', '14px', 'important');
-                                    }
-                                });
-
-                                // Enforce Times New Roman font and size across ALL elements inside the body
                                 document.body.querySelectorAll('*').forEach(node => {
-                                    node.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
-                                    if (node.tagName && ['B', 'STRONG', 'SPAN', 'P', 'DIV', 'A', 'FONT'].includes(node.tagName)) {
-                                        node.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
-                                    }
-                                });
-
-                                document.body.querySelectorAll('b, strong, .bold-field').forEach(el => {
-                                    el.style.setProperty('font-weight', 'bold', 'important');
-                                    el.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
-                                    el.style.setProperty('font-size', '12pt', 'important');
-                                    el.style.setProperty('display', 'inline', 'important');
+                                    node.style.setProperty('font-family', "'Times New Roman', Times, Georgia, serif", 'important');
+                                    node.setAttribute('align', 'left');
+                                    node.style.setProperty('text-align', 'left', 'important');
                                 });
 
                                 document.body.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2037,7 +1996,7 @@ class ModernDarkZohoAutomationApp:
                     )
                     if inserted:
                         filled_body = True
-                        self.log("Formatted Times New Roman email successfully rendered into editor iframe!")
+                        self.log("Formatted Times New Roman table successfully rendered into editor iframe!")
                         break
             except Exception:
                 pass
@@ -2069,98 +2028,30 @@ class ModernDarkZohoAutomationApp:
                                 if (!e) return false;
                                 try {
                                     e.focus();
-                                    let styleEl = document.getElementById('mimicmail-style-override-compose');
-                                    if (!styleEl) {
-                                        styleEl = document.createElement('style');
-                                        styleEl.id = 'mimicmail-style-override-compose';
-                                        document.head ? document.head.appendChild(styleEl) : document.body.appendChild(styleEl);
-                                    }
-                                    styleEl.textContent = `
-                                        [contenteditable="true"], [contenteditable="true"] * {
-                                            font-family: 'Times New Roman', Times, serif !important;
-                                        }
-                                        [contenteditable="true"] div, [contenteditable="true"] p {
-                                            margin: 0 0 14px 0;
-                                            text-align: left !important;
-                                            line-height: 1.5;
-                                        }
-                                    `;
-
-                                    e.style.setProperty('text-align', 'left', 'important');
-                                    e.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
-                                    e.style.setProperty('font-size', '12pt', 'important');
-                                    e.style.setProperty('color', '#000000', 'important');
-                                    e.style.setProperty('line-height', '1.5', 'important');
-                                    e.style.setProperty('margin', '0', 'important');
-                                    e.style.setProperty('padding', '0', 'important');
-
-                                    const sel = window.getSelection();
-                                    const range = document.createRange();
-                                    range.selectNodeContents(e);
-                                    sel.removeAllRanges();
-                                    sel.addRange(range);
-
                                     let ok = document.execCommand('insertHTML', false, html);
                                     if (!ok || !e.innerHTML.trim() || e.innerText.trim().length === 0) {
                                         e.innerHTML = html;
                                     }
 
-                                    // Remove any unwanted leading empty elements/br before Dear Dr
-                                    while (e.firstChild) {
-                                        const fc = e.firstChild;
-                                        const tag = (fc.nodeName || '').toLowerCase();
-                                        const txt = (fc.textContent || '').replace(/[\\u200B-\\u200D\\uFEFF\\s]/g, '');
-                                        if (tag === 'br' || (['p', 'div'].includes(tag) && txt === '')) {
-                                            e.removeChild(fc);
-                                        } else {
-                                            break;
-                                        }
-                                    }
+                                    // Native document font and formatting enforcement
+                                    document.execCommand('selectAll', false, null);
+                                    document.execCommand('fontName', false, 'Times New Roman');
+                                    document.execCommand('fontSize', false, '3');
+                                    document.execCommand('justifyLeft', false, null);
 
-                                    const blocks = e.querySelectorAll('p, div');
-                                    blocks.forEach(p => {
-                                        if (p === e) return;
-                                        if (p.querySelector('p, div')) return;
-                                        const text = (p.innerText || p.textContent || '').trim();
-                                        if (!text) return;
+                                    const sel = window.getSelection();
+                                    if (sel) sel.removeAllRanges();
 
-                                        p.setAttribute('align', 'left');
-                                        p.style.setProperty('text-align', 'left', 'important');
-                                        p.style.setProperty('padding', '0', 'important');
-                                        p.style.setProperty('line-height', '1.5', 'important');
-                                        p.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
-                                        p.style.setProperty('font-size', '12pt', 'important');
+                                    e.style.setProperty('text-align', 'left', 'important');
+                                    e.style.setProperty('font-family', "'Times New Roman', Times, Georgia, serif", 'important');
+                                    e.style.setProperty('font-size', '16px', 'important');
+                                    e.style.setProperty('color', '#000000', 'important');
+                                    e.style.setProperty('line-height', '1.5', 'important');
 
-                                        const firstLine = text.split('\\n')[0].trim();
-                                        const isSalutation = /^(?:dear|hello|hi|greetings)/i.test(firstLine);
-                                        const isClosing = /^(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(firstLine) ||
-                                                          /(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(text);
-
-                                        if (isClosing) {
-                                            p.style.setProperty('margin-top', '18px', 'important');
-                                            p.style.setProperty('margin-bottom', '0', 'important');
-                                        } else if (isSalutation) {
-                                            p.style.setProperty('margin-top', '0', 'important');
-                                            p.style.setProperty('margin-bottom', '14px', 'important');
-                                        } else {
-                                            p.style.setProperty('margin-top', '0', 'important');
-                                            p.style.setProperty('margin-bottom', '14px', 'important');
-                                        }
-                                    });
-
-                                    // Enforce Times New Roman font and size across ALL elements
                                     e.querySelectorAll('*').forEach(node => {
-                                        node.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
-                                        if (node.tagName && ['B', 'STRONG', 'SPAN', 'P', 'DIV', 'A', 'FONT'].includes(node.tagName)) {
-                                            node.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
-                                        }
-                                    });
-
-                                    e.querySelectorAll('b, strong, .bold-field').forEach(child => {
-                                        child.style.setProperty('font-weight', 'bold', 'important');
-                                        child.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
-                                        child.style.setProperty('font-size', '12pt', 'important');
-                                        child.style.setProperty('display', 'inline', 'important');
+                                        node.style.setProperty('font-family', "'Times New Roman', Times, Georgia, serif", 'important');
+                                        node.setAttribute('align', 'left');
+                                        node.style.setProperty('text-align', 'left', 'important');
                                     });
 
                                     e.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2175,7 +2066,7 @@ class ModernDarkZohoAutomationApp:
                         )
                         if inserted:
                             filled_body = True
-                            self.log("Formatted Times New Roman email successfully rendered into compose editor!")
+                            self.log("Formatted Times New Roman table successfully rendered into compose editor!")
                             break
                 except Exception:
                     pass
@@ -2202,51 +2093,14 @@ class ModernDarkZohoAutomationApp:
                 page.keyboard.press("Control+v")
                 time.sleep(0.5)
 
-                # Post-paste styling enforcement across active elements
                 page.evaluate(
                     """() => {
-                        const containers = document.querySelectorAll("div[contenteditable='true'], body[contenteditable='true']");
-                        containers.forEach(e => {
-                            while (e.firstChild) {
-                                const fc = e.firstChild;
-                                const tag = (fc.nodeName || '').toLowerCase();
-                                const txt = (fc.textContent || '').replace(/[\\u200B-\\u200D\\uFEFF\\s]/g, '');
-                                if (tag === 'br' || (['p', 'div'].includes(tag) && txt === '')) {
-                                    e.removeChild(fc);
-                                } else {
-                                    break;
-                                }
-                            }
-                            e.querySelectorAll('p, div').forEach(p => {
-                                if (p === e) return;
-                                if (p.querySelector('p, div')) return;
-                                const text = (p.innerText || p.textContent || '').trim();
-                                if (!text) return;
-                                const firstLine = text.split('\\n')[0].trim();
-                                const isSalutation = /^(?:dear|hello|hi|greetings)/i.test(firstLine);
-                                const isClosing = /^(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(firstLine) ||
-                                                  /(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(text);
-                                if (isClosing) {
-                                    p.setAttribute('align', 'left');
-                                    p.style.setProperty('text-align', 'left', 'important');
-                                    p.style.setProperty('margin-top', '18px', 'important');
-                                    p.style.setProperty('margin-bottom', '0', 'important');
-                                } else if (isSalutation) {
-                                    p.setAttribute('align', 'left');
-                                    p.style.setProperty('text-align', 'left', 'important');
-                                    p.style.setProperty('margin-top', '0', 'important');
-                                    p.style.setProperty('margin-bottom', '14px', 'important');
-                                } else {
-                                    p.setAttribute('align', 'left');
-                                    p.style.setProperty('text-align', 'left', 'important');
-                                    p.style.setProperty('margin-top', '0', 'important');
-                                    p.style.setProperty('margin-bottom', '14px', 'important');
-                                }
-                            });
-                            e.querySelectorAll('*').forEach(node => {
-                                node.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
-                            });
-                        });
+                        document.execCommand('selectAll', false, null);
+                        document.execCommand('fontName', false, 'Times New Roman');
+                        document.execCommand('fontSize', false, '3');
+                        document.execCommand('justifyLeft', false, null);
+                        const sel = window.getSelection();
+                        if (sel) sel.removeAllRanges();
                     }"""
                 )
                 filled_body = True
