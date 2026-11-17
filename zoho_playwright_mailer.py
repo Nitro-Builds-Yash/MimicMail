@@ -298,39 +298,39 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
 
     p_tags = []
 
-    # 1. Salutation (always left-aligned with 0 top margin, 16px bottom margin)
+    # 1. Salutation (always left-aligned with 0 top margin, 12px bottom margin)
     if salutation_block:
         s_inner = "<br>\n".join(salutation_block)
         p_tags.append(
-            f'<p align="left" style="text-align: left !important; margin: 0 0 16px 0 !important; padding: 0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{s_inner}</p>'
+            f'<div align="left" style="text-align: left !important; margin: 0 0 14px 0 !important; padding: 0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;"><font face="Times New Roman, serif" size="3" color="#000000">{s_inner}</font></div>'
         )
 
-    # 2. Body Paragraphs (strictly justified with inter-word justification)
+    # 2. Body Paragraphs (clean left-aligned, natural line spacing, no text stretching)
     for b_para in final_body_blocks:
         if not b_para.strip():
             continue
         p_tags.append(
-            f'<p align="justify" style="text-align: justify !important; text-justify: inter-word !important; text-align-last: left !important; margin: 0 0 16px 0 !important; padding: 0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{b_para.strip()}</p>'
+            f'<div align="left" style="text-align: left !important; margin: 0 0 14px 0 !important; padding: 0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;"><font face="Times New Roman, serif" size="3" color="#000000">{b_para.strip()}</font></div>'
         )
 
-    # 3. Closing & Sign-off Block (always left-aligned with a clean top space before Best regards)
+    # 3. Closing & Sign-off Block (always left-aligned with clean spacing before Best regards)
     if closing_block:
         c_inner = "<br>\n".join(closing_block)
         p_tags.append(
-            f'<p align="left" style="text-align: left !important; margin: 20px 0 0 0 !important; padding: 0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;">{c_inner}</p>'
+            f'<div align="left" style="text-align: left !important; margin: 18px 0 0 0 !important; padding: 0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important;"><font face="Times New Roman, serif" size="3" color="#000000">{c_inner}</font></div>'
         )
 
     # 4. Professional Compliance & Deliverability Opt-Out (protects domain reputation & spam score)
     if include_optout:
         p_tags.append(
-            '<p align="left" style="text-align: left !important; margin: 28px 0 0 0 !important; padding: 10px 0 0 0 !important; border-top: 1px solid #e0e0e0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 9pt !important; color: #777777 !important; line-height: 1.3 !important;">'
+            '<div align="left" style="text-align: left !important; margin: 24px 0 0 0 !important; padding: 10px 0 0 0 !important; border-top: 1px solid #e0e0e0 !important; font-family: \'Times New Roman\', Times, serif !important; font-size: 9pt !important; color: #777777 !important; line-height: 1.3 !important;"><font face="Times New Roman, serif" size="2" color="#777777">'
             '<em>If you do not wish to receive future communications regarding this initiative, simply reply with "Unsubscribe" and your address will be promptly removed.</em>'
-            '</p>'
+            '</font></div>'
         )
         plain_text += '\n\n---\nIf you do not wish to receive future communications regarding this initiative, simply reply with "Unsubscribe" and your address will be promptly removed.'
 
     rich_html = (
-        '<div style="font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important; margin: 0; padding: 0;">\n'
+        '<div class="zmMailBody" style="font-family: \'Times New Roman\', Times, serif !important; font-size: 12pt !important; color: #000000 !important; line-height: 1.5 !important; text-align: left !important; margin: 0; padding: 0;">\n'
         + "\n".join(p_tags) +
         '\n</div>'
     )
@@ -1927,11 +1927,29 @@ class ModernDarkZohoAutomationApp:
                         """(html) => {
                             try {
                                 document.body.focus();
-                                document.body.style.removeProperty('text-align');
+                                let styleEl = document.getElementById('mimicmail-style-override');
+                                if (!styleEl) {
+                                    styleEl = document.createElement('style');
+                                    styleEl.id = 'mimicmail-style-override';
+                                    document.head ? document.head.appendChild(styleEl) : document.body.appendChild(styleEl);
+                                }
+                                styleEl.textContent = `
+                                    body, div, p, span, font, b, strong, a, em {
+                                        font-family: 'Times New Roman', Times, serif !important;
+                                        font-size: 12pt !important;
+                                        text-align: left !important;
+                                    }
+                                    div, p {
+                                        margin: 0 0 14px 0;
+                                        line-height: 1.5;
+                                    }
+                                `;
+
+                                document.body.style.setProperty('text-align', 'left', 'important');
                                 document.body.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                 document.body.style.setProperty('font-size', '12pt', 'important');
                                 document.body.style.setProperty('color', '#000000', 'important');
-                                document.body.style.setProperty('line-height', '1.6', 'important');
+                                document.body.style.setProperty('line-height', '1.5', 'important');
                                 document.body.style.setProperty('margin', '0', 'important');
                                 document.body.style.setProperty('padding', '0', 'important');
 
@@ -1959,16 +1977,17 @@ class ModernDarkZohoAutomationApp:
                                     }
                                 }
 
-                                // Apply styling across p, div, and block containers (skip wrapper elements with children)
+                                // Apply styling across p, div, and block containers
                                 const blocks = document.body.querySelectorAll('p, div');
                                 blocks.forEach(el => {
                                     if (el === document.body) return;
-                                    // Skip container divs that already hold p or div children to avoid double margin cascading
                                     if (el.querySelector('p, div')) return;
 
                                     const text = (el.innerText || el.textContent || '').trim();
                                     if (!text) return;
 
+                                    el.setAttribute('align', 'left');
+                                    el.style.setProperty('text-align', 'left', 'important');
                                     el.style.setProperty('padding', '0', 'important');
                                     el.style.setProperty('line-height', '1.5', 'important');
                                     el.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
@@ -1980,22 +1999,14 @@ class ModernDarkZohoAutomationApp:
                                                       /(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(text);
 
                                     if (isClosing) {
-                                        el.setAttribute('align', 'left');
-                                        el.style.setProperty('text-align', 'left', 'important');
-                                        el.style.setProperty('margin-top', '22px', 'important');
+                                        el.style.setProperty('margin-top', '18px', 'important');
                                         el.style.setProperty('margin-bottom', '0', 'important');
                                     } else if (isSalutation) {
-                                        el.setAttribute('align', 'left');
-                                        el.style.setProperty('text-align', 'left', 'important');
                                         el.style.setProperty('margin-top', '0', 'important');
-                                        el.style.setProperty('margin-bottom', '16px', 'important');
+                                        el.style.setProperty('margin-bottom', '14px', 'important');
                                     } else {
-                                        el.setAttribute('align', 'justify');
-                                        el.style.setProperty('text-align', 'justify', 'important');
-                                        el.style.setProperty('text-justify', 'inter-word', 'important');
-                                        el.style.setProperty('text-align-last', 'left', 'important');
                                         el.style.setProperty('margin-top', '0', 'important');
-                                        el.style.setProperty('margin-bottom', '16px', 'important');
+                                        el.style.setProperty('margin-bottom', '14px', 'important');
                                     }
                                 });
 
@@ -2058,7 +2069,24 @@ class ModernDarkZohoAutomationApp:
                                 if (!e) return false;
                                 try {
                                     e.focus();
-                                    e.style.removeProperty('text-align');
+                                    let styleEl = document.getElementById('mimicmail-style-override-compose');
+                                    if (!styleEl) {
+                                        styleEl = document.createElement('style');
+                                        styleEl.id = 'mimicmail-style-override-compose';
+                                        document.head ? document.head.appendChild(styleEl) : document.body.appendChild(styleEl);
+                                    }
+                                    styleEl.textContent = `
+                                        [contenteditable="true"], [contenteditable="true"] * {
+                                            font-family: 'Times New Roman', Times, serif !important;
+                                        }
+                                        [contenteditable="true"] div, [contenteditable="true"] p {
+                                            margin: 0 0 14px 0;
+                                            text-align: left !important;
+                                            line-height: 1.5;
+                                        }
+                                    `;
+
+                                    e.style.setProperty('text-align', 'left', 'important');
                                     e.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
                                     e.style.setProperty('font-size', '12pt', 'important');
                                     e.style.setProperty('color', '#000000', 'important');
@@ -2096,6 +2124,8 @@ class ModernDarkZohoAutomationApp:
                                         const text = (p.innerText || p.textContent || '').trim();
                                         if (!text) return;
 
+                                        p.setAttribute('align', 'left');
+                                        p.style.setProperty('text-align', 'left', 'important');
                                         p.style.setProperty('padding', '0', 'important');
                                         p.style.setProperty('line-height', '1.5', 'important');
                                         p.style.setProperty('font-family', "'Times New Roman', Times, serif", 'important');
@@ -2107,22 +2137,14 @@ class ModernDarkZohoAutomationApp:
                                                           /(?:best\\s+regards|warm\\s+regards|kind\\s+regards|with\\s+regards|regards|sincerely)/i.test(text);
 
                                         if (isClosing) {
-                                            p.setAttribute('align', 'left');
-                                            p.style.setProperty('text-align', 'left', 'important');
-                                            p.style.setProperty('margin-top', '22px', 'important');
+                                            p.style.setProperty('margin-top', '18px', 'important');
                                             p.style.setProperty('margin-bottom', '0', 'important');
                                         } else if (isSalutation) {
-                                            p.setAttribute('align', 'left');
-                                            p.style.setProperty('text-align', 'left', 'important');
                                             p.style.setProperty('margin-top', '0', 'important');
-                                            p.style.setProperty('margin-bottom', '16px', 'important');
+                                            p.style.setProperty('margin-bottom', '14px', 'important');
                                         } else {
-                                            p.setAttribute('align', 'justify');
-                                            p.style.setProperty('text-align', 'justify', 'important');
-                                            p.style.setProperty('text-justify', 'inter-word', 'important');
-                                            p.style.setProperty('text-align-last', 'left', 'important');
                                             p.style.setProperty('margin-top', '0', 'important');
-                                            p.style.setProperty('margin-bottom', '16px', 'important');
+                                            p.style.setProperty('margin-bottom', '14px', 'important');
                                         }
                                     });
 
@@ -2207,20 +2229,18 @@ class ModernDarkZohoAutomationApp:
                                 if (isClosing) {
                                     p.setAttribute('align', 'left');
                                     p.style.setProperty('text-align', 'left', 'important');
-                                    p.style.setProperty('margin-top', '22px', 'important');
+                                    p.style.setProperty('margin-top', '18px', 'important');
                                     p.style.setProperty('margin-bottom', '0', 'important');
                                 } else if (isSalutation) {
                                     p.setAttribute('align', 'left');
                                     p.style.setProperty('text-align', 'left', 'important');
                                     p.style.setProperty('margin-top', '0', 'important');
-                                    p.style.setProperty('margin-bottom', '16px', 'important');
+                                    p.style.setProperty('margin-bottom', '14px', 'important');
                                 } else {
-                                    p.setAttribute('align', 'justify');
-                                    p.style.setProperty('text-align', 'justify', 'important');
-                                    p.style.setProperty('text-justify', 'inter-word', 'important');
-                                    p.style.setProperty('text-align-last', 'left', 'important');
+                                    p.setAttribute('align', 'left');
+                                    p.style.setProperty('text-align', 'left', 'important');
                                     p.style.setProperty('margin-top', '0', 'important');
-                                    p.style.setProperty('margin-bottom', '16px', 'important');
+                                    p.style.setProperty('margin-bottom', '14px', 'important');
                                 }
                             });
                             e.querySelectorAll('*').forEach(node => {
@@ -2233,16 +2253,7 @@ class ModernDarkZohoAutomationApp:
             except Exception:
                 pass
 
-        time.sleep(1.5)
-
-        # Allow Zoho auto-draft synchronization to register the message to avoid missing draft state / spam flagging
-        try:
-            page.keyboard.press("Space")
-            time.sleep(0.1)
-            page.keyboard.press("Backspace")
-            time.sleep(1.5)
-        except Exception:
-            pass
+        time.sleep(1.0)
 
         # 5. Click Send
         self.log("Clicking Send button...")
