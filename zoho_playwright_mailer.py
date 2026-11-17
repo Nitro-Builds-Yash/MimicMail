@@ -43,25 +43,59 @@ STEALTH_INIT_SCRIPT = """
 
 DEFAULT_SUBJECT = "{title}"
 
+_EXCEL_SYNC_LOCK = threading.Lock()
+_CACHED_WORKBOOKS = {}
+
 def mark_excel_row_status(excel_path: str, row_idx: int, status_str: str = "SENT"):
-    """Thread-safe update of the 'Status' column in the Excel workbook without destroying formulas or formatting."""
-    try:
-        import openpyxl
-        wb = openpyxl.load_workbook(excel_path)
-        sheet = wb.active
-        headers = [c.value for c in sheet[1]]
-        status_col = None
-        for ci, h in enumerate(headers, start=1):
-            if h and str(h).strip().lower() == "status":
-                status_col = ci
-                break
-        if status_col is None:
-            status_col = len(headers) + 1
-            sheet.cell(row=1, column=status_col, value="Status")
-        sheet.cell(row=row_idx + 2, column=status_col, value=status_str)
-        wb.save(excel_path)
-    except Exception as e:
-        print(f"Excel sync notice for row {row_idx + 1}: {e}")
+    """Thread-safe update of the 'Status' column in the Excel workbook without destroying formulas or formatting.
+    Keeps openpyxl workbook cached in memory during active dispatch sessions to eliminate multi-second disk latency."""
+    with _EXCEL_SYNC_LOCK:
+        try:
+            import openpyxl
+            wb = _CACHED_WORKBOOKS.get(excel_path)
+            if wb is None:
+                wb = openpyxl.load_workbook(excel_path)
+                _CACHED_WORKBOOKS[excel_path] = wb
+
+            sheet = wb.active
+            headers = [c.value for c in sheet[1]]
+            status_col = None
+            for ci, h in enumerate(headers, start=1):
+                if h and str(h).strip().lower() == "status":
+                    status_col = ci
+                    break
+            if status_col is None:
+                status_col = len(headers) + 1
+                sheet.cell(row=1, column=status_col, value="Status")
+
+            sheet.cell(row=row_idx + 2, column=status_col, value=status_str)
+            wb.save(excel_path)
+        except Exception as e:
+            # If cached workbook encountered an I/O sync error, evict cache and retry once freshly
+            try:
+                if excel_path in _CACHED_WORKBOOKS:
+                    del _CACHED_WORKBOOKS[excel_path]
+                import openpyxl
+                fresh_wb = openpyxl.load_workbook(excel_path)
+                fresh_sheet = fresh_wb.active
+                headers = [c.value for c in fresh_sheet[1]]
+                status_col = next((ci for ci, h in enumerate(headers, start=1) if h and str(h).strip().lower() == "status"), len(headers) + 1)
+                fresh_sheet.cell(row=1, column=status_col, value="Status")
+                fresh_sheet.cell(row=row_idx + 2, column=status_col, value=status_str)
+                fresh_wb.save(excel_path)
+                _CACHED_WORKBOOKS[excel_path] = fresh_wb
+            except Exception as e2:
+                print(f"Excel sync notice for row {row_idx + 1}: {e2}")
+
+def close_cached_excel_workbook(excel_path: str):
+    """Closes any open openpyxl workbook cache cleanly."""
+    with _EXCEL_SYNC_LOCK:
+        wb = _CACHED_WORKBOOKS.pop(excel_path, None)
+        if wb:
+            try:
+                wb.close()
+            except Exception:
+                pass
 
 if getattr(sys, 'frozen', False):
     APP_BASE_DIR = os.path.dirname(sys.executable)
@@ -1017,12 +1051,23 @@ class ModernDarkZohoAutomationApp:
                 self.log(f"⚠️ Warning: Selected file '{os.path.basename(path)}' is empty.")
                 return
 
-            # Validation 2: Check required columns (email, author name, title)
+            # Validation 2: Check required columns (email, author name, title) with extensive fuzzy synonyms
             col_map = {str(c).strip().lower(): c for c in df.columns}
             
-            author_col = next((col_map[k] for k in ["author name", "author_name", "author", "name"] if k in col_map), None)
-            email_col = next((col_map[k] for k in ["email", "email address", "e-mail"] if k in col_map), None)
-            title_col = next((col_map[k] for k in ["title", "designation", "role"] if k in col_map), None)
+            author_col = next((col_map[k] for k in [
+                "author name", "author_name", "author", "name", "recipient name", 
+                "recipient", "full name", "fullname", "contact name", "client name", "person"
+            ] if k in col_map), None)
+            
+            email_col = next((col_map[k] for k in [
+                "email", "email address", "e-mail", "mail", "email_id", "email id",
+                "recipient email", "e_mail", "mail address", "contact email"
+            ] if k in col_map), None)
+            
+            title_col = next((col_map[k] for k in [
+                "title", "designation", "role", "job title", "job_title", "position",
+                "occupation", "salutation", "profession"
+            ] if k in col_map), None)
 
             missing = []
             if not email_col:
@@ -1030,7 +1075,9 @@ class ModernDarkZohoAutomationApp:
             if not author_col:
                 missing.append("author name")
             if not title_col:
-                missing.append("title")
+                # If title is missing in the sheet, automatically default rather than blocking!
+                title_col = "__AUTO_TITLE__"
+                df["__AUTO_TITLE__"] = "Professional"
 
             if missing:
                 missing_str = ", ".join(f"'{m}'" for m in missing)
@@ -1043,7 +1090,7 @@ class ModernDarkZohoAutomationApp:
                     f"Please make sure your Excel spreadsheet includes the header columns:\n"
                     f"• email (Recipient's email address)\n"
                     f"• author name (Recipient's name or author)\n"
-                    f"• title (Recipient's role or subject)\n\n"
+                    f"• title (Recipient's role or designation)\n\n"
                     f"Note: No 'Status' column is required; dispatch tracking is handled automatically."
                 )
                 self.log(f"⚠️ Warning: '{os.path.basename(path)}' is missing required columns: {missing_str}")
@@ -1054,12 +1101,7 @@ class ModernDarkZohoAutomationApp:
             empty_emails = df[email_col].isna().sum() + (df[email_col].astype(str).str.strip() == "").sum()
             
             if empty_emails > 0:
-                messagebox.showwarning(
-                    "⚠️ Excel Warning — Blank Emails Detected",
-                    f"Note: Found {empty_emails} row(s) with missing or blank email addresses.\n"
-                    f"These will be flagged or skipped during outreach."
-                )
-                self.log(f"⚠️ Note: {empty_emails} rows have missing email values.")
+                self.log(f"⚠️ Note: {empty_emails} row(s) have missing/blank email values and will be safely skipped during dispatch.")
 
             self.excel_file_path = path
             self.file_label.config(text=f"Loaded: {os.path.basename(path)}", foreground=self.fg_primary)
@@ -1523,9 +1565,23 @@ class ModernDarkZohoAutomationApp:
                 break
 
             col_map = {str(c).strip().lower(): c for c in df.columns}
-            name_col = next((col_map[k] for k in ["author name", "author_name", "author", "name"] if k in col_map), "name")
-            email_col = next((col_map[k] for k in ["email", "email address", "e-mail"] if k in col_map), "email")
-            title_col = next((col_map[k] for k in ["title", "designation", "role"] if k in col_map), "title")
+            name_col = next((col_map[k] for k in [
+                "author name", "author_name", "author", "name", "recipient name", 
+                "recipient", "full name", "fullname", "contact name", "client name", "person"
+            ] if k in col_map), "name")
+            
+            email_col = next((col_map[k] for k in [
+                "email", "email address", "e-mail", "mail", "email_id", "email id",
+                "recipient email", "e_mail", "mail address", "contact email"
+            ] if k in col_map), "email")
+            
+            title_col = next((col_map[k] for k in [
+                "title", "designation", "role", "job title", "job_title", "position",
+                "occupation", "salutation", "profession"
+            ] if k in col_map), "title")
+
+            if title_col not in df.columns:
+                df[title_col] = "Professional"
 
             total_records = len(df)
             has_status_col = any(c.strip().lower() == "status" for c in df.columns)
@@ -2215,6 +2271,11 @@ class ModernDarkZohoAutomationApp:
         time.sleep(3.5)
 
     def _on_close(self):
+        try:
+            if hasattr(self, "excel_file_path") and self.excel_file_path:
+                close_cached_excel_workbook(self.excel_file_path)
+        except Exception:
+            pass
         self.cmd_queue.put(("QUIT", None))
         self.root.destroy()
 
