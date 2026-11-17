@@ -1153,61 +1153,64 @@ class ModernDarkZohoAutomationApp:
         close_btn.pack(side=tk.RIGHT)
 
     def request_start_automation(self):
-        lic = get_license_state()
-        if lic["is_blocked"]:
-            self.show_payment_cooling_dialog(lic)
-            self.log("⚠️ Outreach dispatch paused: Tool is in its 5-day cooling period after 30 days of active usage.")
-            return
+        try:
+            lic = get_license_state()
+            if lic["is_blocked"]:
+                self.show_payment_cooling_dialog(lic)
+                self.log("⚠️ Outreach dispatch paused: Tool is in its 5-day cooling period after 30 days of active usage.")
+                return
 
-        if not self.excel_file_path or not os.path.exists(self.excel_file_path):
-            messagebox.showwarning("File Missing", "Please select an Excel workbook first.")
-            return
+            if not self.excel_file_path or not os.path.exists(self.excel_file_path):
+                messagebox.showwarning("File Missing", "Please select an Excel workbook first using 'Browse Excel (.xlsx)'.")
+                return
 
-        # Check subject lines: Strictly required to be uploaded via .txt file
-        subj_pool = list(self.subject_lines_pool) if self.subject_lines_pool else []
-        if not subj_pool:
-            messagebox.showwarning(
-                "Subject File Required",
-                "Please upload a .txt file containing subject lines using the '📄 Upload .txt Subjects' button.\n\n"
-                "The tool randomly selects a subject from this file for each email and does not use the title column."
-            )
-            return
+            # Check subject lines: Strictly required to be uploaded via .txt file
+            subj_pool = list(self.subject_lines_pool) if self.subject_lines_pool else []
+            if not subj_pool:
+                messagebox.showwarning(
+                    "Subject File Required",
+                    "Please upload a .txt file containing subject lines using the '📄 Upload .txt Subjects' button.\n\n"
+                    "The tool randomly selects a subject from this file for each email and does not use the title column."
+                )
+                return
 
-        # Gather all non-empty user templates across the 3 slots
-        active_templates = []
-        for i, txt_widget in enumerate(self.template_text_widgets):
-            content = txt_widget.get("1.0", tk.END).strip()
-            if content:
-                active_templates.append(content)
+            # Gather all non-empty user templates across the 3 slots
+            active_templates = []
+            for i, txt_widget in enumerate(self.template_text_widgets):
+                content = txt_widget.get("1.0", tk.END).strip()
+                if content:
+                    active_templates.append(content)
 
-        if not active_templates:
-            messagebox.showwarning("No Templates", "Please provide at least 1 template in the 3 slots (paste HTML or load a file).")
-            return
+            if not active_templates:
+                messagebox.showwarning("No Templates", "Please provide at least 1 template in the 3 slots (paste HTML or load a file).")
+                return
 
-        if subj_pool:
             self.log(f"Verified {len(active_templates)} template(s) and {len(subj_pool)} uploaded subject line(s). Random picker active.")
-        else:
-            self.log(f"Verified {len(active_templates)} active user template(s) with subject template: '{subj_tmpl}'.")
 
-        self.is_running = True
-        self.stop_requested = False
-        self._toggle_ui(running=True)
+            self.is_running = True
+            self.stop_requested = False
+            self._toggle_ui(running=True)
 
-        params = {
-            "subj_tmpl": subj_tmpl,
-            "subj_pool": subj_pool,
-            "body_tmpls": active_templates,
-            "base_mins": self.interval_var.get(),
-            "use_jitter": self.jitter_var.get(),
-            "excel_path": self.excel_file_path,
-            "parallel_tabs": max(1, self.tabs_var.get()),
-            "include_optout": self.optout_var.get(),
-            "deduplicate_emails": self.dedup_var.get(),
-            "chunk_rest_hours": max(1.0, float(self.chunk_rest_hours_var.get())),
-            "max_session_cap": max(1, int(self.session_cap_var.get()))
-        }
-        self._ensure_worker_started()
-        self.cmd_queue.put(("START_AUTOMATION", params))
+            params = {
+                "subj_pool": subj_pool,
+                "body_tmpls": active_templates,
+                "base_mins": self.interval_var.get(),
+                "use_jitter": self.jitter_var.get(),
+                "excel_path": self.excel_file_path,
+                "parallel_tabs": max(1, self.tabs_var.get()),
+                "include_optout": self.optout_var.get(),
+                "deduplicate_emails": self.dedup_var.get(),
+                "chunk_rest_hours": max(1.0, float(self.chunk_rest_hours_var.get())),
+                "max_session_cap": max(1, int(self.session_cap_var.get()))
+            }
+            self._ensure_worker_started()
+            self.cmd_queue.put(("START_AUTOMATION", params))
+        except Exception as e:
+            self.is_running = False
+            self.stop_requested = False
+            self._toggle_ui(running=False)
+            self.log(f"⚠️ Error initiating automation: {e}")
+            messagebox.showerror("Execution Error", f"Unable to start automation:\n\n{e}")
 
     def stop_automation(self):
         if self.is_running:
