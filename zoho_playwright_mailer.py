@@ -435,15 +435,48 @@ class ModernDarkZohoAutomationApp:
         self.subject_lines_pool = []
         self.subjects_file_path = None
 
-        # Thread-safe work queue and background worker
+        # Thread-safe queues and background worker
         self.cmd_queue = queue.Queue()
+        self.ui_queue = queue.Queue()
         self.worker_thread = None
 
         self._apply_dark_theme()
         self._build_ui()
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.root.after(30, self._poll_ui_queue)
         self.root.after(800, self._check_cooling_period_status)
+
+    def _poll_ui_queue(self):
+        """Processes cross-thread UI requests safely on the Tkinter main thread."""
+        try:
+            while True:
+                item = self.ui_queue.get_nowait()
+                kind, payload = item
+                if kind == "LOG":
+                    self.log_text.config(state=tk.NORMAL)
+                    t = datetime.datetime.now().strftime("%H:%M:%S")
+                    self.log_text.insert(tk.END, f"[{t}] {payload}\n")
+                    self.log_text.see(tk.END)
+                    self.log_text.config(state=tk.DISABLED)
+                elif kind == "EXEC":
+                    try:
+                        payload()
+                    except Exception:
+                        pass
+        except queue.Empty:
+            pass
+        except Exception:
+            pass
+        finally:
+            try:
+                self.root.after(40, self._poll_ui_queue)
+            except Exception:
+                pass
+
+    def ui_dispatch(self, func):
+        """Enqueues a function to be executed safely on the Tkinter main thread."""
+        self.ui_queue.put(("EXEC", func))
 
     def _ensure_worker_started(self):
         if not self.worker_thread or not self.worker_thread.is_alive():
@@ -955,13 +988,10 @@ class ModernDarkZohoAutomationApp:
         self.slider_val_lbl.config(text=f"{float(val):.1f} mins")
 
     def log(self, text: str):
-        def _append():
-            self.log_text.config(state=tk.NORMAL)
-            t = datetime.datetime.now().strftime("%H:%M:%S")
-            self.log_text.insert(tk.END, f"[{t}] {text}\n")
-            self.log_text.see(tk.END)
-            self.log_text.config(state=tk.DISABLED)
-        self.root.after(0, _append)
+        if hasattr(self, "ui_queue"):
+            self.ui_queue.put(("LOG", str(text)))
+        else:
+            print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {text}")
 
     def request_open_browser(self):
         self._ensure_worker_started()
@@ -1021,7 +1051,6 @@ class ModernDarkZohoAutomationApp:
 
             # Validation 3: Check for empty essential values
             name_col = author_col
-            email_col = col_map["email"]
             empty_emails = df[email_col].isna().sum() + (df[email_col].astype(str).str.strip() == "").sum()
             
             if empty_emails > 0:
@@ -1271,7 +1300,7 @@ class ModernDarkZohoAutomationApp:
 
                         if not (browser_context and browser_page and not browser_page.is_closed()):
                             self.log("Opening persistent Chromium browser...")
-                            self.root.after(0, lambda: self.session_indicator.config(text="● Launching...", fg="#000000"))
+                            self.ui_dispatch(lambda: self.session_indicator.config(text="● Launching...", fg="#000000"))
 
                             browser_context = playwright_instance.chromium.launch_persistent_context(
                                 user_data_dir=active_profile_dir,
@@ -1298,7 +1327,7 @@ class ModernDarkZohoAutomationApp:
                                 self.log(f"Navigation warning (will proceed): {nav_e}")
 
                             self.log("Browser is open! Please log in if prompted and leave this window open.")
-                            self.root.after(0, lambda: self.session_indicator.config(text="● Active & Connected", fg=self.accent_red))
+                            self.ui_dispatch(lambda: self.session_indicator.config(text="● Active & Connected", fg=self.accent_red))
                         else:
                             self.log("Browser already open. Bringing tab to front...")
                             browser_page.bring_to_front()
@@ -1307,8 +1336,8 @@ class ModernDarkZohoAutomationApp:
                         self.log(f"Open browser error: {err_msg}")
                         if "ProcessSingleton" in err_msg or "Target page, context or browser has been closed" in err_msg or "locked" in err_msg.lower():
                             self.log("💡 Tip: A browser window is already open. Close existing Chromium windows and retry.")
-                        self.root.after(0, lambda: self.session_indicator.config(text="● Open Error (Check Logs)", fg=self.accent_red))
-                        self.root.after(0, lambda m=err_msg: messagebox.showerror("Browser Launch Error", f"Unable to launch browser:\n\n{m[:200]}\n\nIf another browser window is already using this profile, please close it and try again."))
+                        self.ui_dispatch(lambda: self.session_indicator.config(text="● Open Error (Check Logs)", fg=self.accent_red))
+                        self.ui_dispatch(lambda m=err_msg: messagebox.showerror("Browser Launch Error", f"Unable to launch browser:\n\n{m[:200]}\n\nIf another browser window is already using this profile, please close it and try again."))
 
                 elif cmd == "START_AUTOMATION":
                     try:
@@ -1352,13 +1381,23 @@ class ModernDarkZohoAutomationApp:
                             except Exception:
                                 return False
 
+                        # If page is empty / about:blank, navigate to Zoho Mail
                         curr_url = browser_page.url.lower()
+                        if curr_url.startswith("about:") or not curr_url:
+                            self.log("Navigating browser to Zoho Mail: https://mail.zoho.com ...")
+                            try:
+                                browser_page.goto("https://mail.zoho.com", timeout=60000, wait_until="domcontentloaded")
+                            except Exception as nav_e:
+                                self.log(f"Navigation notice: {nav_e}")
+                            time.sleep(3)
+                            curr_url = browser_page.url.lower()
+
                         self.log(f"Current page URL: {curr_url}")
 
                         # Check if user is currently on login / accounts / 2FA screen
                         if "accounts.zoho" in curr_url or "signin" in curr_url or "login" in curr_url:
                             self.log("⚠️ Zoho Login/Verification detected. Waiting for you to complete sign-in in the browser...")
-                            self.root.after(0, lambda: self.session_indicator.config(text="● Waiting for Login...", fg="#000000"))
+                            self.ui_dispatch(lambda: self.session_indicator.config(text="● Waiting for Login...", fg="#000000"))
                             # Wait up to 180 seconds for login to finish and reach mail.zoho
                             logged_in = False
                             for _ in range(90):
@@ -1370,20 +1409,12 @@ class ModernDarkZohoAutomationApp:
                                     if "mail.zoho" in u and "accounts.zoho" not in u:
                                         logged_in = True
                                         self.log("Login detected! Waiting for Zoho Mail app to initialize...")
-                                        # Let Zoho's SPA finish rendering its auth token and inbox
                                         time.sleep(5)
                                         break
                                 except Exception:
                                     pass
                             if not logged_in and not self.stop_requested:
                                 raise Exception("Login timeout: Please complete your Zoho login in the browser window and click Start Automation again.")
-
-                        # Helper to check if Zoho Mail UI is ready
-                        def is_mailbox_ready(page):
-                            try:
-                                return bool(page.query_selector("button[title*='New Mail' i], .zmNavMail, #zm_mail, [data-app='mail']"))
-                            except Exception:
-                                return False
 
                         # Wait for mailbox to stabilize if already on mail.zoho.com
                         for _ in range(10):
@@ -1420,7 +1451,6 @@ class ModernDarkZohoAutomationApp:
                                     self.log(f"Navigation notice: {e_nav}")
                                 time.sleep(4)
                             else:
-                                # Already at /zm/, don't interrupt with another goto; just wait for SPA hydration
                                 self.log("Waiting for Zoho Mail SPA hydration...")
                                 try:
                                     browser_page.wait_for_selector("button[title*='New Mail' i], .zmNavMail, #zm_mail, [data-app='mail']", timeout=15000)
@@ -1436,18 +1466,18 @@ class ModernDarkZohoAutomationApp:
                         except Exception:
                             pass
 
-                        self.root.after(0, lambda: self.session_indicator.config(text="● In Mailbox & Automating", fg=self.accent_red))
+                        self.ui_dispatch(lambda: self.session_indicator.config(text="● In Mailbox & Automating", fg=self.accent_red))
 
                         # 2. Run batch dispatch across single or multiple background tabs
                         self._execute_batch(browser_context, browser_page, data)
 
                     except Exception as batch_err:
                         self.log(f"Automation execution error: {batch_err}")
-                        self.root.after(0, lambda e=str(batch_err): messagebox.showerror("Automation Error", e))
+                        self.ui_dispatch(lambda e=str(batch_err): messagebox.showerror("Automation Error", e))
                     finally:
                         self.is_running = False
-                        self.root.after(0, lambda: self.timer_display.config(text="⏱ Queue: Idle", fg=self.fg_muted))
-                        self.root.after(0, lambda: self._toggle_ui(running=False))
+                        self.ui_dispatch(lambda: self.timer_display.config(text="⏱ Queue: Idle", fg=self.fg_muted))
+                        self.ui_dispatch(lambda: self._toggle_ui(running=False))
 
         except Exception as fatal:
             self.log(f"Fatal worker error: {fatal}")
@@ -1511,10 +1541,10 @@ class ModernDarkZohoAutomationApp:
             if not pending_indices:
                 if batch_number == 1:
                     self.log("All rows in this spreadsheet are already marked as SENT.")
-                    self.root.after(0, lambda: messagebox.showinfo("Completed", "All recipients in this spreadsheet are already sent!"))
+                    self.ui_dispatch(lambda: messagebox.showinfo("Completed", "All recipients in this spreadsheet are already sent!"))
                 else:
                     self.log(f"All {total_records} rows in this spreadsheet are now completely finished!")
-                    self.root.after(0, lambda s=total_session_sent: messagebox.showinfo("Outreach Complete", f"All data in spreadsheet completed!\nTotal dispatched in this session: {s}"))
+                    self.ui_dispatch(lambda s=total_session_sent: messagebox.showinfo("Outreach Complete", f"All data in spreadsheet completed!\nTotal dispatched in this session: {s}"))
                 return
 
             target_indices = pending_indices[:BATCH_CAP]
@@ -1617,7 +1647,7 @@ class ModernDarkZohoAutomationApp:
                     curr_pending = max(0, total_records - curr_sent - curr_errors)
                     curr_pct = int((curr_sent / total_records * 100)) if total_records > 0 else 0
 
-                    self.root.after(0, lambda s=curr_sent, t=total_records, p=curr_pending, e=curr_errors, pct=curr_pct: (
+                    self.ui_dispatch(lambda s=curr_sent, t=total_records, p=curr_pending, e=curr_errors, pct=curr_pct: (
                         self.stats_lbl.config(text=f"Total: {t} | Sent: {s} | Pending: {p}"),
                         self.progress_bar.config(value=pct),
                         self.progress_pct_lbl.config(text=f"{pct}%"),
@@ -1635,7 +1665,7 @@ class ModernDarkZohoAutomationApp:
                     remaining = int(sleep_sec)
                     while remaining > 0 and not self.stop_requested:
                         m, s = divmod(remaining, 60)
-                        self.root.after(0, lambda mm=m, ss=s: self.timer_display.config(
+                        self.ui_dispatch(lambda mm=m, ss=s: self.timer_display.config(
                             text=f"⏱ Next dispatch: {mm:02d}:{ss:02d}", fg=self.accent_red
                         ))
                         time.sleep(1)
@@ -1658,7 +1688,7 @@ class ModernDarkZohoAutomationApp:
             # 2. Check if maximum session cap (e.g. 150 emails) has been reached
             if total_session_sent >= max_session_cap:
                 self.log(f"🎯 Target session cap of {max_session_cap} emails reached! Halting to protect inbox sender reputation.")
-                self.root.after(0, lambda s=total_session_sent, c=max_session_cap: messagebox.showinfo(
+                self.ui_dispatch(lambda s=total_session_sent, c=max_session_cap: messagebox.showinfo(
                     "Target Cap Reached",
                     f"✓ Reached safety cap of {s} / {c} emails for this session!\n\nSpreadsheet has been synchronized. Next batch can be safely run tomorrow."
                 ))
@@ -1678,7 +1708,7 @@ class ModernDarkZohoAutomationApp:
 
             if remaining_unprocessed == 0:
                 self.log(f"All data completed! Total session emails sent: {total_session_sent}")
-                self.root.after(0, lambda s=total_session_sent: messagebox.showinfo("Completed", f"All spreadsheet records have been successfully sent!\nTotal sent: {s}"))
+                self.ui_dispatch(lambda s=total_session_sent: messagebox.showinfo("Completed", f"All spreadsheet records have been successfully sent!\nTotal sent: {s}"))
                 return
 
             # 4. Mandatory cooldown: Configurable rest interval (default: 1.5 - 2 hrs) between each 40-mail chunk
@@ -1688,7 +1718,7 @@ class ModernDarkZohoAutomationApp:
                 hrs, rem = divmod(wait_remaining, 3600)
                 mins, secs = divmod(rem, 60)
                 time_str = f"{hrs:02d}:{mins:02d}:{secs:02d}"
-                self.root.after(0, lambda ts=time_str, crh=chunk_rest_hours: self.timer_display.config(
+                self.ui_dispatch(lambda ts=time_str, crh=chunk_rest_hours: self.timer_display.config(
                     text=f"⏳ {crh:.1f}-Hr Interval: Next 40 in {ts}", fg="#000000"
                 ))
                 time.sleep(1)
@@ -1700,7 +1730,7 @@ class ModernDarkZohoAutomationApp:
             batch_number += 1
 
         self.log(f"Automation finished or halted! Session total sent: {total_session_sent}")
-        self.root.after(0, lambda s=total_session_sent: messagebox.showinfo("Done", f"Automation finished!\nTotal sent in session: {s}"))
+        self.ui_dispatch(lambda s=total_session_sent: messagebox.showinfo("Done", f"Automation finished!\nTotal sent in session: {s}"))
 
     def _send_in_browser(self, page, to_email, subject, body_html, body_text=None):
         if body_text is None:
