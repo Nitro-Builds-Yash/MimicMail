@@ -111,34 +111,40 @@ if not os.path.exists(PAYMENT_QR_PATH):
 
 # Default user-customizable templates for the 3 slots (Clean, professional text format matching exact spacing and alignment)
 SAMPLE_HTML_TEMPLATES = [
-    """Dear [Author's Name],
+    """Dear Dr. [Author's Name],
+
+Greetings from [Journal Name]!
 
 We are pleased to invite you to share your expertise in the field of cancer research by contributing to our upcoming publication. Your work has significantly impacted the community, and we believe your insights would greatly benefit our readers.
 
 This is a valuable opportunity to showcase your research and connect with peers who are equally passionate about advancing cancer treatment. We look forward to your positive response and your essential contribution to this important endeavor.
 
 Best regards,
-MimicMail Editorial Board
+[Journal Name] Editorial Board
 MimicMail Publishing Directorate""",
 
-    """Dear [Author's Name],
+    """Dear Dr. [Author's Name],
+
+Greetings from [Journal Name]!
 
 On behalf of our editorial committee, we cordially invite you to contribute your esteemed research to our upcoming edition on cutting-edge oncology and clinical therapeutics. Your pioneering findings continue to inspire colleagues worldwide.
 
 By presenting your work with us, you will reach a global readership of specialists dedicated to accelerating clinical breakthroughs. We would be deeply honored to include your submission in this milestone release.
 
 Best regards,
-MimicMail Editorial Board
+[Journal Name] Editorial Board
 MimicMail Scientific Council""",
 
-    """Dear [Author's Name],
+    """Dear Dr. [Author's Name],
+
+Greetings from [Journal Name]!
 
 We are writing to warmly invite your valuable contribution to our specialized medical issue exploring breakthrough approaches in cancer diagnostics and patient care. Your distinguished record in the discipline makes your perspective particularly vital.
 
 This publication provides an international stage to highlight your latest discoveries and engage with top researchers across the scientific domain. We sincerely anticipate your participation and look forward to working together.
 
 Best regards,
-MimicMail Editorial Board
+[Journal Name] Editorial Board
 Global Oncology Review"""
 ]
 
@@ -240,8 +246,19 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     )
 
     # 3. Intelligent Paragraph & Spacing Auto-Readjustment:
-    # Preserves user's intentional blank line paragraph separation while cleaning raw lines.
-    raw_blocks = [b.strip() for b in re.split(r'\n\s*\n+', html_content) if b.strip()]
+    # First, pre-separate components that often get pasted as continuous text without double blank lines
+    pre_norm = html_content.strip()
+    # 1. Ensure "Greetings from..." stands on its own distinct line/paragraph (before it)
+    pre_norm = re.sub(r'(?i)\s*(Greetings\s+from\b)', r'\n\n\1', pre_norm)
+    # 2. Ensure "Greetings from [Journal]!/." breaks into a new paragraph after it
+    pre_norm = re.sub(r'(?i)\b(Greetings\s+from\s+[^!\.\r\n]+?[!\.])[ \t]*(?=[A-Za-z<])', r'\1\n\n', pre_norm)
+    # 3. Ensure salutation ends with paragraph break if stuck to next sentence
+    pre_norm = re.sub(r'(?i)^\s*(Dear\s+(?:Dr\.?|Doctor|Prof\.?|Professor|Mr\.?|Ms\.?|Mrs\.?|)\s*(?:<[^>]+>|[^,])+,\s*)(?=[A-Za-z<])', r'\1\n\n', pre_norm)
+    # 4. Ensure complimentary closing stands on its own distinct paragraph
+    pre_norm = re.sub(r'([,\.\?!])[ \t]*(Best\s+regards|Warm\s+regards|Kind\s+regards|With\s+regards|Regards|Sincerely|Thanks\s+and\s+regards)\b', r'\1\n\n\2', pre_norm, flags=re.I)
+    pre_norm = re.sub(r'(?i)(Best\s+regards|Warm\s+regards|Kind\s+regards|With\s+regards|Regards|Sincerely|Thanks\s+and\s+regards),?[ \t]*(?=[A-Za-z<])', r'\1,\n', pre_norm)
+
+    raw_blocks = [b.strip() for b in re.split(r'\n\s*\n+', pre_norm) if b.strip()]
     salutation_block = []
     body_blocks = []
     closing_block = []
@@ -253,7 +270,7 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
             continue
 
         # Detect if the block starts with a salutation on line 0
-        if mode == 'salutation' and re.match(r'(?i)^\s*(?:<[^>]+>\s*)*(?:dear|hello|hi|greetings|respected|to)\b', b_lines[0]):
+        if mode == 'salutation' and re.match(r'(?i)^\s*(?:<[^>]+>\s*)*(?:dear|hello|hi|greetings\s+dr|respected|to)\b', b_lines[0]):
             salutation_block = [b_lines[0]]
             b_lines = b_lines[1:]
             mode = 'body'
@@ -279,7 +296,18 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         if mode == 'closing':
             closing_block.extend(b_lines)
         else:
-            body_blocks.append(b_lines)
+            # If a line inside body starts with Greetings from, separate it
+            g_lines = []
+            for bl in b_lines:
+                if re.match(r'(?i)^\s*Greetings\s+from\b', bl):
+                    if g_lines:
+                        body_blocks.append(g_lines)
+                        g_lines = []
+                    body_blocks.append([bl])
+                else:
+                    g_lines.append(bl)
+            if g_lines:
+                body_blocks.append(g_lines)
 
     # Bold salutation strictly at the beginning of the salutation line
     if salutation_block:
@@ -321,56 +349,56 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     # Reconstruct blocks into bulletproof table rows
     table_rows = []
     td_style = (
-        "padding: 0 0 16px 0; "
+        "padding: 0 0 18px 0; "
         "margin: 0; "
         "font-family: 'Times New Roman', Times, Georgia, serif; "
         "font-size: 16px; "
         "color: #000000; "
-        "line-height: 1.5; "
+        "line-height: 1.6; "
         "text-align: left;"
     )
 
-    # 1. Salutation
+    # 1. Salutation (clean 18px separation)
     if salutation_block:
         s_inner = "<br>\n".join(salutation_block)
         table_rows.append(
-            f'<tr><td align="left" style="{td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000; line-height: 1.5;">{s_inner}</span></font></td></tr>'
+            f'<tr><td align="left" style="{td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000; line-height: 1.6;">{s_inner}</span></font></td></tr>'
         )
 
-    # 2. Body Paragraphs
+    # 2. Body Paragraphs (clean 18px separation per paragraph)
     for b_para in final_body_blocks:
         if not b_para.strip():
             continue
         table_rows.append(
-            f'<tr><td align="left" style="{td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000; line-height: 1.5;">{b_para.strip()}</span></font></td></tr>'
+            f'<tr><td align="left" style="{td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000; line-height: 1.6;">{b_para.strip()}</span></font></td></tr>'
         )
 
-    # 3. Closing & Sign-off Block
+    # 3. Closing & Sign-off Block (clean 10px top padding before sign-off)
     if closing_block:
         c_inner = "<br>\n".join(closing_block)
         closing_td_style = (
-            "padding: 8px 0 0 0; "
+            "padding: 10px 0 0 0; "
             "margin: 0; "
             "font-family: 'Times New Roman', Times, Georgia, serif; "
             "font-size: 16px; "
             "color: #000000; "
-            "line-height: 1.5; "
+            "line-height: 1.6; "
             "text-align: left;"
         )
         table_rows.append(
-            f'<tr><td align="left" style="{closing_td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000; line-height: 1.5;">{c_inner}</span></font></td></tr>'
+            f'<tr><td align="left" style="{closing_td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000; line-height: 1.6;">{c_inner}</span></font></td></tr>'
         )
 
     # 4. Professional Compliance Opt-Out Footer
     if include_optout:
         optout_td_style = (
-            "padding: 22px 0 0 0; "
+            "padding: 24px 0 0 0; "
             "margin: 0; "
             "border-top: 1px solid #e0e0e0; "
             "font-family: 'Times New Roman', Times, Georgia, serif; "
             "font-size: 12px; "
             "color: #777777; "
-            "line-height: 1.3; "
+            "line-height: 1.4; "
             "text-align: left;"
         )
         table_rows.append(
@@ -383,7 +411,7 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     rich_html = (
         '<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" '
         'style="border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; '
-        'font-family: \'Times New Roman\', Times, Georgia, serif; font-size: 16px; color: #000000; line-height: 1.5; '
+        'font-family: \'Times New Roman\', Times, Georgia, serif; font-size: 16px; color: #000000; line-height: 1.6; '
         'margin: 0; padding: 0; text-align: left; background-color: transparent;">\n'
         f'{rows_html}\n'
         '</table>'
