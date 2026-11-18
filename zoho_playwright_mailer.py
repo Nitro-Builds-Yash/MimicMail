@@ -111,25 +111,27 @@ if not os.path.exists(PAYMENT_QR_PATH):
 
 # Default user-customizable templates for the 3 slots (Clean, professional text format matching exact spacing and alignment)
 SAMPLE_HTML_TEMPLATES = [
+    """Dear Dr. {name},
+
+Greetings from our research team.
+
+We recently reviewed your contribution to {title} and appreciate its scientific contribution to the field of Applied Physics. In recognition of your scholarly contributions, we would like to invite you to submit your forthcoming original research or review article to the Journal of Science and Mathematics Letters.
+
+We welcome innovative research covering Advanced physical research, technological developments, and interdisciplinary scientific applications. We would be delighted to consider your work for publication and welcome your contribution to our journal.
+
+If you are interested, kindly reply to [editor@eclinicalsciresearch.info](mailto:editor@eclinicalsciresearch.info). Our team would be pleased to assist you with the further process. Thank you for your time and consideration. We look forward to the possibility of receiving your valuable contribution.
+
+With regards,
+Williams M
+Journal of Science and Mathematics Letters | 2462-2052""",
+
     """Dear Dr. [Author's Name],
 
 Greetings from [Journal Name]!
 
-We are pleased to invite you to share your expertise in the field of cancer research by contributing to our upcoming publication. Your work has significantly impacted the community, and we believe your insights would greatly benefit our readers.
+On behalf of our editorial committee, we cordially invite you to contribute your esteemed research to our upcoming edition in [Journal Name]. Following your groundbreaking work presented in [Paper Title], we believe your insights would greatly benefit our international readership.
 
-This is a valuable opportunity to showcase your research and connect with peers who are equally passionate about advancing cancer treatment. We look forward to your positive response and your essential contribution to this important endeavor.
-
-Best regards,
-[Journal Name] Editorial Board
-MimicMail Publishing Directorate""",
-
-    """Dear Dr. [Author's Name],
-
-Greetings from [Journal Name]!
-
-On behalf of our editorial committee, we cordially invite you to contribute your esteemed research to our upcoming edition on cutting-edge oncology and clinical therapeutics. Your pioneering findings continue to inspire colleagues worldwide.
-
-By presenting your work with us, you will reach a global readership of specialists dedicated to accelerating clinical breakthroughs. We would be deeply honored to include your submission in this milestone release.
+By publishing with us, your findings will reach a global audience of specialists dedicated to accelerating clinical breakthroughs. We would be deeply honored to include your submission in this milestone release.
 
 Best regards,
 [Journal Name] Editorial Board
@@ -139,9 +141,9 @@ MimicMail Scientific Council""",
 
 Greetings from [Journal Name]!
 
-We are writing to warmly invite your valuable contribution to our specialized medical issue exploring breakthrough approaches in cancer diagnostics and patient care. Your distinguished record in the discipline makes your perspective particularly vital.
+We are writing to warmly invite your valuable submission to our specialized issue in [Journal Name]. Your distinguished record and recent work on [Paper Title] demonstrate the significant impact of your research within the scientific community.
 
-This publication provides an international stage to highlight your latest discoveries and engage with top researchers across the scientific domain. We sincerely anticipate your participation and look forward to working together.
+This upcoming issue provides an esteemed global platform to highlight your latest discoveries and engage with top researchers across the domain. We sincerely anticipate your participation and look forward to collaborating with you.
 
 Best regards,
 [Journal Name] Editorial Board
@@ -185,8 +187,14 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         "{name}", "{NAME}", "{author name}", "{author_name}", "{author}", "{AUTHOR}"
     ]
     title_placeholders = [
-        "[Title]", "[title]", "[TITLE]", "[Designation]", "[designation]",
-        "{title}", "{TITLE}", "{designation}", "{role}", "[Paper Title]", "{paper_title}"
+        "[Paper Title]", "[paper title]", "[Paper title]", "[PAPER TITLE]", "{paper_title}", "{paper title}",
+        "[Title]", "[title]", "[TITLE]", "{title}", "{TITLE}",
+        "[Article Title]", "[article title]", "[Article title]", "{article_title}", "{article title}",
+        "[Paper]", "[paper]", "{paper}",
+        "[Article]", "[article]", "{article}",
+        "[Manuscript Title]", "[manuscript title]", "{manuscript_title}",
+        "[Publication Title]", "{publication_title}",
+        "[Designation]", "[designation]", "{designation}", "{role}"
     ]
     journal_placeholders = [
         "[Journal Name]", "[Journal name]", "[journal name]", "[JOURNAL NAME]",
@@ -199,6 +207,10 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     ]
 
     plain_text = clean_text
+    # 1. Clean markdown links for plain text fallback
+    clean_text = re.sub(r'\[([^\]]+)\]\((?:mailto:[^\)]+|https?://[^\)]+)\)', r'\1', clean_text)
+
+    plain_text = clean_text
     for ph in name_placeholders:
         plain_text = plain_text.replace(ph, r_name)
     for ph in title_placeholders:
@@ -209,17 +221,23 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     for ph in email_placeholders:
         plain_text = plain_text.replace(ph, r_email)
 
-    # 2. Escape text safely for HTML insertion
-    escaped_template = escape(clean_text)
-    name_escaped = escape(r_name)
-    title_escaped = escape(r_title)
-    journal_escaped = escape(r_journal) if r_journal else ""
-    email_escaped = escape(r_email)
-
     bold_style = "font-family: 'Times New Roman', Times, serif; font-weight: bold; font-size: 16px; color: #000000;"
-    bold_name = f"<b style=\"{bold_style}\"><font face=\"Times New Roman, Times, serif\" color=\"#000000\">{name_escaped}</font></b>"
-    bold_title = f"<b style=\"{bold_style}\"><font face=\"Times New Roman, Times, serif\" color=\"#000000\">{title_escaped}</font></b>"
-    bold_journal = f"<b style=\"{bold_style}\"><font face=\"Times New Roman, Times, serif\" color=\"#000000\">{journal_escaped}</font></b>" if journal_escaped else ""
+    bold_name = f"<b style=\"{bold_style}\"><font face=\"Times New Roman, Times, serif\" color=\"#000000\">{escape(r_name)}</font></b>"
+    bold_title = f"<b style=\"{bold_style}\"><font face=\"Times New Roman, Times, serif\" color=\"#000000\">{escape(r_title)}</font></b>"
+    bold_journal = f"<b style=\"{bold_style}\"><font face=\"Times New Roman, Times, serif\" color=\"#000000\">{escape(r_journal)}</font></b>" if r_journal else ""
+
+    # Replace markdown links before escaping other text
+    html_work = raw_template
+    link_map = {}
+    def save_link(m):
+        key = f"__LINK_HOLDER_{len(link_map)}__"
+        link_map[key] = f'<a href="{m.group(2)}" style="color: #000000; text-decoration: underline;"><font face="Times New Roman, Times, serif" color="#000000">{escape(m.group(1))}</font></a>'
+        return key
+
+    html_work = re.sub(r'\[([^\]]+)\]\((mailto:[^\)]+|https?://[^\)]+)\)', save_link, html_work)
+    escaped_template = escape(html_work)
+    for key, repl in link_map.items():
+        escaped_template = escaped_template.replace(escape(key), repl)
 
     html_content = escaped_template
     for ph in name_placeholders:
@@ -230,90 +248,72 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         for ph in journal_placeholders:
             html_content = html_content.replace(escape(ph), bold_journal)
     for ph in email_placeholders:
-        html_content = html_content.replace(escape(ph), email_escaped)
+        html_content = html_content.replace(escape(ph), escape(r_email))
 
     # Automatically detect and bold journal names in text:
-    # Matches patterns like "Journal of Oncology...", "American Journal of...", "Global Oncology Review", etc.
     def bold_journal_pattern(m):
         txt = m.group(1).strip()
         return f'<b style="{bold_style}"><font face="Times New Roman, Times, serif" color="#000000">{txt}</font></b>'
 
-    # Match "Journal/Annals/Archives/Review of ..." inline
+    # Match "Journal/Annals/Archives/Review/Letters of ..." inline
     html_content = re.sub(
-        r'(?i)\b((?:(?:International|Global|American|European|Asian|World|British|Open|Clinical|National)\s+)?(?:Journal|Annals|Archives|Review)\s+of\s+[A-Za-z0-9\s,\'&-]+?)(?=[\.,;:\n]|\s+(?:for|to|with|in|by|which|where|and\s+its)\b|$)',
+        r'(?i)\b((?:(?:International|Global|American|European|Asian|World|British|Open|Clinical|National)\s+)?(?:Journal|Annals|Archives|Review|Letters)\s+of\s+[A-Za-z0-9\s,\'&-]+?(?:\s+(?:Letters|Reports|Review))?)(?=[\.,;:\n]|\s+[|]|\s+(?:for|to|with|in|by|which|where|and\s+its)\b|$)',
         bold_journal_pattern,
         html_content
     )
 
-    # 3. Intelligent Paragraph & Spacing Auto-Readjustment:
-    # First, pre-separate components that often get pasted as continuous text without double blank lines
-    pre_norm = html_content.strip()
-    # 1. Ensure "Greetings from..." stands on its own distinct line/paragraph (before it)
-    pre_norm = re.sub(r'(?i)\s*(Greetings\s+from\b)', r'\n\n\1', pre_norm)
-    # 2. Ensure "Greetings from [Journal]!/." breaks into a new paragraph after it
-    pre_norm = re.sub(r'(?i)\b(Greetings\s+from\s+[^!\.\r\n]+?[!\.])[ \t]*(?=[A-Za-z<])', r'\1\n\n', pre_norm)
-    # 3. Ensure salutation ends with paragraph break if stuck to next sentence
-    pre_norm = re.sub(r'(?i)^\s*(Dear\s+(?:Dr\.?|Doctor|Prof\.?|Professor|Mr\.?|Ms\.?|Mrs\.?|)\s*(?:<[^>]+>|[^,])+,\s*)(?=[A-Za-z<])', r'\1\n\n', pre_norm)
-    # 4. Ensure complimentary closing stands on its own distinct paragraph
-    pre_norm = re.sub(r'([,\.\?!])[ \t]*(Best\s+regards|Warm\s+regards|Kind\s+regards|With\s+regards|Regards|Sincerely|Thanks\s+and\s+regards)\b', r'\1\n\n\2', pre_norm, flags=re.I)
-    pre_norm = re.sub(r'(?i)(Best\s+regards|Warm\s+regards|Kind\s+regards|With\s+regards|Regards|Sincerely|Thanks\s+and\s+regards),?[ \t]*(?=[A-Za-z<])', r'\1,\n', pre_norm)
+    # 3. Intelligent Section & Paragraph Decomposition:
+    raw_lines = [l.strip() for l in html_content.splitlines() if l.strip()]
 
-    raw_blocks = [b.strip() for b in re.split(r'\n\s*\n+', pre_norm) if b.strip()]
     salutation_block = []
-    body_blocks = []
+    greetings_block = []
+    body_lines = []
     closing_block = []
+
     mode = 'salutation'
-
-    for block in raw_blocks:
-        b_lines = [l.strip() for l in block.split('\n') if l.strip()]
-        if not b_lines:
-            continue
-
-        # Detect if the block starts with a salutation on line 0
-        if mode == 'salutation' and re.match(r'(?i)^\s*(?:<[^>]+>\s*)*(?:dear|hello|hi|greetings\s+dr|respected|to)\b', b_lines[0]):
-            salutation_block = [b_lines[0]]
-            b_lines = b_lines[1:]
-            mode = 'body'
-            if not b_lines:
+    for line in raw_lines:
+        if mode == 'salutation':
+            if re.match(r'(?i)^\s*(?:<[^>]+>\s*)*(?:dear|hello|hi|respected|to)\b', line):
+                salutation_block.append(line)
+                mode = 'greetings'
                 continue
+            mode = 'greetings'
 
-        # Check if closing/sign-off begins in this block strictly at start of a line
-        closing_idx = -1
-        for idx, l in enumerate(b_lines):
-            if re.match(r'(?i)^\s*(?:<[^>]+>\s*)*(?:best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely\s+yours|sincerely|yours\s+sincerely|thanking\s+you|thanks\s+and\s+regards|thanks)\b', l):
-                closing_idx = idx
-                break
+        if mode == 'greetings':
+            if re.match(r'(?i)^\s*(?:<[^>]+>\s*)*greetings\b', line):
+                greetings_block.append(line)
+                mode = 'body'
+                continue
+            mode = 'body'
 
-        if closing_idx != -1:
-            before_closing = b_lines[:closing_idx]
-            after_closing = b_lines[closing_idx:]
-            if before_closing:
-                body_blocks.append(before_closing)
-            closing_block.extend(after_closing)
-            mode = 'closing'
+        if mode == 'body':
+            if re.match(r'(?i)^\s*(?:<[^>]+>\s*)*(?:with\s+regards|best\s+regards|warm\s+regards|kind\s+regards|regards|sincerely\s+yours|sincerely|yours\s+sincerely|thanking\s+you|thanks\s+and\s+regards|thanks)\b', line):
+                closing_block.append(line)
+                mode = 'closing'
+                continue
+            body_lines.append(line)
             continue
 
         if mode == 'closing':
-            closing_block.extend(b_lines)
-        else:
-            # If a line inside body starts with Greetings from, separate it
-            g_lines = []
-            for bl in b_lines:
-                if re.match(r'(?i)^\s*Greetings\s+from\b', bl):
-                    if g_lines:
-                        body_blocks.append(g_lines)
-                        g_lines = []
-                    body_blocks.append([bl])
-                else:
-                    g_lines.append(bl)
-            if g_lines:
-                body_blocks.append(g_lines)
+            closing_block.append(line)
+
+    # Divide body lines into balanced, spacious paragraphs:
+    final_body_blocks = []
+    curr_para = []
+    for bl in body_lines:
+        curr_para.append(bl)
+        # Check if bl ends a sentence
+        if len(curr_para) >= 2 and re.search(r'[\.\?!]$', bl):
+            final_body_blocks.append(" ".join(curr_para))
+            curr_para = []
+    if curr_para:
+        final_body_blocks.append(" ".join(curr_para))
 
     # Bold salutation strictly at the beginning of the salutation line
     if salutation_block:
         s_line = salutation_block[0]
         s_line = re.sub(
-            r'(?i)^\s*(Dear\s+(?:Dr\.?|Doctor|Prof\.?|Professor|Mr\.?|Ms\.?|Mrs\.?|))(?=\s|<|\b)',
+            r'(?i)^\s*(Dear\s+(?:Dr\.?|Doctor|Prof\.?|Professor|Mr\.?|Ms\.?|Mrs\.?|)|Hello|Hi|Respected\s+Sir/Madam|Respected\s+Sir|Respected\s+Madam|To)(?=\s|<|\b)',
             lambda m: f'<b style="{bold_style}"><font face="Times New Roman, Times, serif" color="#000000">{m.group(1)}</font></b>',
             s_line
         )
@@ -323,7 +323,7 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     if closing_block:
         c_lines_new = []
         for l in closing_block:
-            # Bold standalone journal names on sign-off lines (e.g. "Global Oncology Review")
+            # Bold standalone journal names on sign-off lines
             m_j = re.match(r'^\s*([A-Za-z0-9\'&-]+(?:\s+[A-Za-z0-9\'&-]+){0,5}\s+(?:Journal|Review|Letters|Reports|Archives|Annals)(?:\s+of\s+[A-Za-z0-9\s,\'&-]+)?)\s*$', l, re.I)
             if m_j and not l.startswith("<b"):
                 l = f'<b style="{bold_style}"><font face="Times New Roman, Times, serif" color="#000000">{m_j.group(1)}</font></b>'
@@ -335,16 +335,6 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
             )
             c_lines_new.append(l)
         closing_block = c_lines_new
-
-    # Reconstruct body paragraphs naturally
-    final_body_blocks = []
-    for bb in body_blocks:
-        if not bb:
-            continue
-        # Join lines within a single paragraph with a single space
-        paragraph_text = " ".join(bb)
-        if paragraph_text.strip():
-            final_body_blocks.append(paragraph_text.strip())
 
     # Reconstruct blocks into bulletproof table rows
     table_rows = []
@@ -365,7 +355,14 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
             f'<tr><td align="left" style="{td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000; line-height: 1.6;">{s_inner}</span></font></td></tr>'
         )
 
-    # 2. Body Paragraphs (clean 18px separation per paragraph)
+    # 2. Dedicated Greetings Line (clean 18px separation)
+    if greetings_block:
+        g_inner = "<br>\n".join(greetings_block)
+        table_rows.append(
+            f'<tr><td align="left" style="{td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000; line-height: 1.6;">{g_inner}</span></font></td></tr>'
+        )
+
+    # 3. Body Paragraphs (clean 18px separation per paragraph)
     for b_para in final_body_blocks:
         if not b_para.strip():
             continue
@@ -373,7 +370,7 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
             f'<tr><td align="left" style="{td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000; line-height: 1.6;">{b_para.strip()}</span></font></td></tr>'
         )
 
-    # 3. Closing & Sign-off Block (clean 10px top padding before sign-off)
+    # 4. Closing & Sign-off Block (clean 10px top padding before sign-off)
     if closing_block:
         c_inner = "<br>\n".join(closing_block)
         closing_td_style = (
@@ -779,7 +776,7 @@ class ModernDarkZohoAutomationApp:
         nb_header = ttk.Frame(tmpl_card, style="Card.TFrame")
         nb_header.pack(fill=tk.X, pady=(2, 4))
         ttk.Label(nb_header, text="Paste or load email message templates below (Picks randomly per recipient):", style="DarkMuted.TLabel").pack(side=tk.LEFT)
-        tk.Label(nb_header, text="Times New Roman | Bold {name} & {title}", bg="#f3f4f6", fg="#111827", font=("Segoe UI", 8, "bold"), padx=6, pady=2, highlightbackground="#e5e7eb", highlightthickness=1).pack(side=tk.RIGHT)
+        tk.Label(nb_header, text="Times New Roman | Bold {name}, {title} & {journal}", bg="#f3f4f6", fg="#111827", font=("Segoe UI", 8, "bold"), padx=6, pady=2, highlightbackground="#e5e7eb", highlightthickness=1).pack(side=tk.RIGHT)
 
         self.template_notebook = ttk.Notebook(tmpl_card, style="Dark.TNotebook")
         self.template_notebook.pack(fill=tk.BOTH, expand=True, pady=(2, 0))
@@ -1147,7 +1144,10 @@ class ModernDarkZohoAutomationApp:
             ] if k in col_map), None)
             
             title_col = next((col_map[k] for k in [
-                "title", "designation", "role", "job title", "job_title", "position",
+                "title", "paper title", "paper_title", "article title", "article_title",
+                "paper", "article", "manuscript title", "manuscript_title", "manuscript",
+                "research title", "research_title", "publication title", "publication_title",
+                "designation", "role", "job title", "job_title", "position",
                 "occupation", "salutation", "profession"
             ] if k in col_map), None)
 
@@ -1658,7 +1658,10 @@ class ModernDarkZohoAutomationApp:
             ] if k in col_map), "email")
             
             title_col = next((col_map[k] for k in [
-                "title", "designation", "role", "job title", "job_title", "position",
+                "title", "paper title", "paper_title", "article title", "article_title",
+                "paper", "article", "manuscript title", "manuscript_title", "manuscript",
+                "research title", "research_title", "publication title", "publication_title",
+                "designation", "role", "job title", "job_title", "position",
                 "occupation", "salutation", "profession"
             ] if k in col_map), "title")
 
