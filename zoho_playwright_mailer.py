@@ -158,11 +158,11 @@ def clean_to_plain_text(s: str) -> str:
     # Normalize multiple blank lines to double newlines
     return re.sub(r'\n{3,}', '\n\n', '\n'.join(lines)).strip()
 
-def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, r_email: str, include_optout: bool = True):
+def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, r_email: str, r_journal: str = "", include_optout: bool = True):
     """
     Builds both:
     1. Rich HTML strictly rendered in Times New Roman (12pt), perfectly left-aligned,
-       with auto-readjusted paragraph spacing, with '{name}', '{title}', 'Dear Dr' / salutations,
+       with auto-readjusted paragraph spacing, with '{name}', '{title}', '{journal}', 'Dear Dr' / salutations,
        and 'Best regards' / sign-offs bolded.
        Also appends a subtle, professional opt-out footer to maintain 100% spam compliance.
     2. Clean plain text fallback.
@@ -180,7 +180,13 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     ]
     title_placeholders = [
         "[Title]", "[title]", "[TITLE]", "[Designation]", "[designation]",
-        "{title}", "{TITLE}", "{designation}", "{role}"
+        "{title}", "{TITLE}", "{designation}", "{role}", "[Paper Title]", "{paper_title}"
+    ]
+    journal_placeholders = [
+        "[Journal Name]", "[Journal name]", "[journal name]", "[JOURNAL NAME]",
+        "[Journal]", "[journal]", "[JOURNAL]",
+        "{journal}", "{JOURNAL}", "{journal_name}", "{journal name}", "{JOURNAL_NAME}",
+        "[Publication]", "[publication]", "{publication}"
     ]
     email_placeholders = [
         "[Email]", "[email]", "[EMAIL]", "{email}", "{EMAIL}"
@@ -191,6 +197,9 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         plain_text = plain_text.replace(ph, r_name)
     for ph in title_placeholders:
         plain_text = plain_text.replace(ph, r_title)
+    if r_journal:
+        for ph in journal_placeholders:
+            plain_text = plain_text.replace(ph, r_journal)
     for ph in email_placeholders:
         plain_text = plain_text.replace(ph, r_email)
 
@@ -198,44 +207,40 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     escaped_template = escape(clean_text)
     name_escaped = escape(r_name)
     title_escaped = escape(r_title)
+    journal_escaped = escape(r_journal) if r_journal else ""
     email_escaped = escape(r_email)
 
     bold_style = "font-family: 'Times New Roman', Times, serif; font-weight: bold; font-size: 16px; color: #000000;"
     bold_name = f"<b style=\"{bold_style}\"><font face=\"Times New Roman, Times, serif\" color=\"#000000\">{name_escaped}</font></b>"
     bold_title = f"<b style=\"{bold_style}\"><font face=\"Times New Roman, Times, serif\" color=\"#000000\">{title_escaped}</font></b>"
+    bold_journal = f"<b style=\"{bold_style}\"><font face=\"Times New Roman, Times, serif\" color=\"#000000\">{journal_escaped}</font></b>" if journal_escaped else ""
 
     html_content = escaped_template
     for ph in name_placeholders:
         html_content = html_content.replace(escape(ph), bold_name)
     for ph in title_placeholders:
         html_content = html_content.replace(escape(ph), bold_title)
+    if bold_journal:
+        for ph in journal_placeholders:
+            html_content = html_content.replace(escape(ph), bold_journal)
     for ph in email_placeholders:
         html_content = html_content.replace(escape(ph), email_escaped)
 
-    # Automatically detect and bold salutations: "Dear Dr.", "Dear Dr", "Dear Professor", "Dear Prof.", "Dear"
-    def bold_salutation(m):
-        txt = m.group(1)
+    # Automatically detect and bold journal names in text:
+    # Matches patterns like "Journal of Oncology...", "American Journal of...", "Global Oncology Review", etc.
+    def bold_journal_pattern(m):
+        txt = m.group(1).strip()
         return f'<b style="{bold_style}"><font face="Times New Roman, Times, serif" color="#000000">{txt}</font></b>'
 
+    # Match "Journal/Annals/Archives/Review of ..." inline
     html_content = re.sub(
-        r'(?i)\b(Dear\s+(?:Dr\.?|Doctor|Prof\.?|Professor|Mr\.?|Ms\.?|Mrs\.?|))(?=\s|<|\b)',
-        bold_salutation,
-        html_content
-    )
-
-    # Automatically detect and bold complimentary sign-offs:
-    def bold_closing(m):
-        txt = m.group(1)
-        return f'<b style="{bold_style}"><font face="Times New Roman, Times, serif" color="#000000">{txt}</font></b>'
-
-    html_content = re.sub(
-        r'(?i)\b(Best\s+regards|Warm\s+regards|Kind\s+regards|With\s+regards|Regards|Sincerely(?:\s+yours)?)\b',
-        bold_closing,
+        r'(?i)\b((?:(?:International|Global|American|European|Asian|World|British|Open|Clinical|National)\s+)?(?:Journal|Annals|Archives|Review)\s+of\s+[A-Za-z0-9\s,\'&-]+?)(?=[\.,;:\n]|\s+(?:for|to|with|in|by|which|where|and\s+its)\b|$)',
+        bold_journal_pattern,
         html_content
     )
 
     # 3. Intelligent Paragraph & Spacing Auto-Readjustment:
-    # Handles whatever raw text the user provides (double-spaced, single-spaced, irregular indents).
+    # Preserves user's intentional blank line paragraph separation while cleaning raw lines.
     raw_blocks = [b.strip() for b in re.split(r'\n\s*\n+', html_content) if b.strip()]
     salutation_block = []
     body_blocks = []
@@ -247,18 +252,18 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         if not b_lines:
             continue
 
-        # Split salutation if on first line
-        if mode == 'salutation' and re.match(r'(?i)^(?:<b[^>]*>)?\s*(?:dear|hello|hi|greetings)\b', b_lines[0]):
+        # Detect if the block starts with a salutation on line 0
+        if mode == 'salutation' and re.match(r'(?i)^\s*(?:<[^>]+>\s*)*(?:dear|hello|hi|greetings|respected|to)\b', b_lines[0]):
             salutation_block = [b_lines[0]]
             b_lines = b_lines[1:]
             mode = 'body'
             if not b_lines:
                 continue
 
-        # Check if closing/sign-off begins in this block
+        # Check if closing/sign-off begins in this block strictly at start of a line
         closing_idx = -1
         for idx, l in enumerate(b_lines):
-            if re.search(r'(?i)\b(?:best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely)\b', l):
+            if re.match(r'(?i)^\s*(?:<[^>]+>\s*)*(?:best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely\s+yours|sincerely|yours\s+sincerely|thanking\s+you|thanks\s+and\s+regards|thanks)\b', l):
                 closing_idx = idx
                 break
 
@@ -276,24 +281,42 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         else:
             body_blocks.append(b_lines)
 
-    # Reconstruct body paragraphs:
-    # Handles both multi-block templates (separated by blank lines) and single-block templates (long text with multiple sentences).
+    # Bold salutation strictly at the beginning of the salutation line
+    if salutation_block:
+        s_line = salutation_block[0]
+        s_line = re.sub(
+            r'(?i)^\s*(Dear\s+(?:Dr\.?|Doctor|Prof\.?|Professor|Mr\.?|Ms\.?|Mrs\.?|))(?=\s|<|\b)',
+            lambda m: f'<b style="{bold_style}"><font face="Times New Roman, Times, serif" color="#000000">{m.group(1)}</font></b>',
+            s_line
+        )
+        salutation_block[0] = s_line
+
+    # Bold complimentary sign-off strictly on the sign-off line
+    if closing_block:
+        c_lines_new = []
+        for l in closing_block:
+            # Bold standalone journal names on sign-off lines (e.g. "Global Oncology Review")
+            m_j = re.match(r'^\s*([A-Za-z0-9\'&-]+(?:\s+[A-Za-z0-9\'&-]+){0,5}\s+(?:Journal|Review|Letters|Reports|Archives|Annals)(?:\s+of\s+[A-Za-z0-9\s,\'&-]+)?)\s*$', l, re.I)
+            if m_j and not l.startswith("<b"):
+                l = f'<b style="{bold_style}"><font face="Times New Roman, Times, serif" color="#000000">{m_j.group(1)}</font></b>'
+
+            l = re.sub(
+                r'(?i)^\s*(Best\s+regards|Warm\s+regards|Kind\s+regards|With\s+regards|Regards|Sincerely\s+yours|Sincerely|Yours\s+sincerely|Thanking\s+you|Thanks\s+and\s+regards|Thanks)\b',
+                lambda m: f'<b style="{bold_style}"><font face="Times New Roman, Times, serif" color="#000000">{m.group(1)}</font></b>',
+                l
+            )
+            c_lines_new.append(l)
+        closing_block = c_lines_new
+
+    # Reconstruct body paragraphs naturally
     final_body_blocks = []
     for bb in body_blocks:
-        if len(body_blocks) == 1 and len(bb) > 1:
-            # If the user provided one long block with multiple lines, group every 2-3 lines into a balanced paragraph
-            curr_chunk = []
-            for line in bb:
-                curr_chunk.append(line)
-                if len(curr_chunk) >= 2 and re.search(r'[\.\?!]$', line):
-                    final_body_blocks.append(" ".join(curr_chunk))
-                    curr_chunk = []
-            if curr_chunk:
-                final_body_blocks.append(" ".join(curr_chunk))
-        else:
-            # Join line-wrapped text within paragraph with space
-            paragraph_text = " ".join(bb)
-            final_body_blocks.append(paragraph_text)
+        if not bb:
+            continue
+        # Join lines within a single paragraph with a single space
+        paragraph_text = " ".join(bb)
+        if paragraph_text.strip():
+            final_body_blocks.append(paragraph_text.strip())
 
     # Reconstruct blocks into bulletproof table rows
     table_rows = []
@@ -311,7 +334,7 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     if salutation_block:
         s_inner = "<br>\n".join(salutation_block)
         table_rows.append(
-            f'<tr><td align="left" style="{td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000;">{s_inner}</span></font></td></tr>'
+            f'<tr><td align="left" style="{td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000; line-height: 1.5;">{s_inner}</span></font></td></tr>'
         )
 
     # 2. Body Paragraphs
@@ -335,7 +358,7 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
             "text-align: left;"
         )
         table_rows.append(
-            f'<tr><td align="left" style="{closing_td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000;">{c_inner}</span></font></td></tr>'
+            f'<tr><td align="left" style="{closing_td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000; line-height: 1.5;">{c_inner}</span></font></td></tr>'
         )
 
     # 4. Professional Compliance Opt-Out Footer
@@ -1611,6 +1634,11 @@ class ModernDarkZohoAutomationApp:
                 "occupation", "salutation", "profession"
             ] if k in col_map), "title")
 
+            journal_col = next((col_map[k] for k in [
+                "journal name", "journal_name", "journal", "publication", "source journal",
+                "journal title", "journal_title", "magazine"
+            ] if k in col_map), None)
+
             if title_col not in df.columns:
                 df[title_col] = "Professional"
 
@@ -1675,6 +1703,7 @@ class ModernDarkZohoAutomationApp:
                     r_name = str(row[name_col]).strip() if pd.notna(row[name_col]) else "Valued Professional"
                     r_email = str(row[email_col]).strip() if pd.notna(row[email_col]) else ""
                     r_title = str(row[title_col]).strip() if pd.notna(row[title_col]) else "Professional"
+                    r_journal = str(row[journal_col]).strip() if (journal_col and pd.notna(row[journal_col])) else ""
 
                     import re
                     EMAIL_REGEX = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w+$")
@@ -1700,12 +1729,13 @@ class ModernDarkZohoAutomationApp:
                     else:
                         personalized_subject = "Important Invitation & Inquiry"
 
-                    # Generate formatted Times New Roman HTML with bolded {name} and {title}, plus clean plain text fallback
+                    # Generate formatted Times New Roman HTML with bolded {name}, {title}, and {journal}, plus clean plain text fallback
                     rich_body_html, plain_body_text = build_formatted_email_content(
                         raw_template=chosen_body_tmpl,
                         r_name=r_name,
                         r_title=r_title,
                         r_email=r_email,
+                        r_journal=r_journal,
                         include_optout=include_optout
                     )
 
