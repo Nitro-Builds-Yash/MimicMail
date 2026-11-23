@@ -15,28 +15,11 @@ from PIL import Image, ImageTk
 STEALTH_INIT_SCRIPT = """
 (() => {
     try {
-        // 1. Mask navigator.webdriver
+        // Mask navigator.webdriver cleanly without tampering with browser internals
         Object.defineProperty(navigator, 'webdriver', {
             get: () => undefined,
             configurable: true
         });
-    } catch(e) {}
-
-    try {
-        // 2. Ensure chrome object exists cleanly without breaking SPA internals
-        if (!window.chrome) {
-            window.chrome = {};
-        }
-    } catch(e) {}
-
-    try {
-        // 3. Normalise notification permissions query
-        const originalQuery = window.navigator.permissions.query;
-        window.navigator.permissions.query = (parameters) => (
-            parameters && parameters.name === 'notifications' ?
-                Promise.resolve({ state: Notification.permission }) :
-                originalQuery(parameters)
-        );
     } catch(e) {}
 })();
 """
@@ -1447,7 +1430,8 @@ class ModernDarkZohoAutomationApp:
                                     "--disable-blink-features=AutomationControlled",
                                     "--no-sandbox",
                                     "--disable-infobars",
-                                    "--disable-dev-shm-usage"
+                                    "--disable-dev-shm-usage",
+                                    "--disable-gpu"
                                 ]
                             )
                             # Inject stealth script into all frames on creation
@@ -1455,7 +1439,7 @@ class ModernDarkZohoAutomationApp:
 
                             browser_page = browser_context.pages[0] if browser_context.pages else browser_context.new_page()
                             try:
-                                browser_page.goto("https://mail.zoho.com", timeout=60000, wait_until="domcontentloaded")
+                                browser_page.goto("https://mail.zoho.com/zm/", timeout=60000, wait_until="domcontentloaded")
                             except Exception as nav_e:
                                 self.log(f"Navigation warning (will proceed): {nav_e}")
 
@@ -1499,7 +1483,8 @@ class ModernDarkZohoAutomationApp:
                                     "--disable-blink-features=AutomationControlled",
                                     "--no-sandbox",
                                     "--disable-infobars",
-                                    "--disable-dev-shm-usage"
+                                    "--disable-dev-shm-usage",
+                                    "--disable-gpu"
                                 ]
                             )
                             browser_context.add_init_script(STEALTH_INIT_SCRIPT)
@@ -1517,9 +1502,9 @@ class ModernDarkZohoAutomationApp:
                         # If page is empty / about:blank, navigate to Zoho Mail
                         curr_url = browser_page.url.lower()
                         if curr_url.startswith("about:") or not curr_url:
-                            self.log("Navigating browser to Zoho Mail: https://mail.zoho.com ...")
+                            self.log("Navigating browser to Zoho Mail: https://mail.zoho.com/zm/ ...")
                             try:
-                                browser_page.goto("https://mail.zoho.com", timeout=60000, wait_until="domcontentloaded")
+                                browser_page.goto("https://mail.zoho.com/zm/", timeout=60000, wait_until="domcontentloaded")
                             except Exception as nav_e:
                                 self.log(f"Navigation notice: {nav_e}")
                             time.sleep(3)
