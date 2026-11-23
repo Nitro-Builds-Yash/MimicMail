@@ -555,6 +555,7 @@ class ModernDarkZohoAutomationApp:
 
         self._apply_dark_theme()
         self._build_ui()
+        self._ensure_worker_started()
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.after(30, self._poll_ui_queue)
@@ -592,9 +593,17 @@ class ModernDarkZohoAutomationApp:
         self.ui_queue.put(("EXEC", func))
 
     def _ensure_worker_started(self):
-        if not self.worker_thread or not self.worker_thread.is_alive():
-            self.worker_thread = threading.Thread(target=self._dedicated_browser_thread, daemon=True)
-            self.worker_thread.start()
+        try:
+            if not hasattr(self, "worker_thread") or not self.worker_thread or not self.worker_thread.is_alive():
+                self.worker_thread = threading.Thread(target=self._dedicated_browser_thread, daemon=True)
+                self.worker_thread.start()
+        except Exception as e:
+            self.log(f"Worker startup notice: {e}")
+
+    # Aliases to guarantee no attribute lookup errors regardless of underscore convention
+    _ensure_workerstarted = _ensure_worker_started
+    ensure_worker_started = _ensure_worker_started
+    ensure_workerstarted = _ensure_worker_started
 
     def _apply_dark_theme(self):
         # Monochromatic Minimalist Black & White Palette (White Background Theme)
