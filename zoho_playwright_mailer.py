@@ -155,67 +155,91 @@ def clean_to_plain_text(s: str) -> str:
     # Normalize multiple blank lines to double newlines
     return re.sub(r'\n{3,}', '\n\n', '\n'.join(lines)).strip()
 
-def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, r_email: str, r_journal: str = "", include_optout: bool = True):
+def format_email_body_html(
+    raw_template: str,
+    name: str = "",
+    title: str = "",
+    email: str = "",
+    journal_name: str = "",
+    include_optout: bool = True,
+    row_data: dict = None,
+    **kwargs
+) -> tuple[str, str]:
     """
     Builds both:
-    1. Rich HTML strictly rendered in Times New Roman (12pt), perfectly left-aligned,
-       with auto-readjusted paragraph spacing, with '{name}', '{title}', '{journal}', 'Dear Dr' / salutations,
-       and 'Best regards' / sign-offs bolded.
-       Also appends a subtle, professional opt-out footer to maintain 100% spam compliance.
+    1. Rich HTML strictly rendered in Times New Roman (16px / 12pt), perfectly left-aligned,
+       with auto-readjusted paragraph spacing.
+       CRITICAL: Whatever content is inside {...} brackets (including {journal}, {name}, {title},
+       or custom journal names like {Journal of Applied Science}) is ALWAYS rendered in BOLD!
+       Also any [...] placeholders ([Journal Name], [Author's Name], [Paper Title]) are rendered in BOLD.
+       Salutations ('Dear Dr') and sign-offs are bolded.
+       Appends optional professional opt-out footer.
     2. Clean plain text fallback.
     """
     import re
-    from html import escape
+    from html import escape, unescape
 
-    clean_text = clean_to_plain_text(raw_template)
-
-    # 1. Substitute placeholders into plain text
-    name_placeholders = [
-        "[Author's Name]", "[Author Name]", "[Author’s Name]", "[author's name]", "[author name]",
-        "[Name]", "[name]", "[NAME]",
-        "{name}", "{NAME}", "{author name}", "{author_name}", "{author}", "{AUTHOR}"
-    ]
-    title_placeholders = [
-        "[Paper Title]", "[paper title]", "[Paper title]", "[PAPER TITLE]", "{paper_title}", "{paper title}",
-        "[Title]", "[title]", "[TITLE]", "{title}", "{TITLE}",
-        "[Article Title]", "[article title]", "[Article title]", "{article_title}", "{article title}",
-        "[Paper]", "[paper]", "{paper}",
-        "[Article]", "[article]", "{article}",
-        "[Manuscript Title]", "[manuscript title]", "{manuscript_title}",
-        "[Publication Title]", "{publication_title}",
-        "[Designation]", "[designation]", "{designation}", "{role}"
-    ]
-    journal_placeholders = [
-        "[Journal Name]", "[Journal name]", "[journal name]", "[JOURNAL NAME]",
-        "[Journal]", "[journal]", "[JOURNAL]",
-        "{journal}", "{JOURNAL}", "{journal_name}", "{journal name}", "{JOURNAL_NAME}",
-        "[Publication]", "[publication]", "{publication}"
-    ]
-    email_placeholders = [
-        "[Email]", "[email]", "[EMAIL]", "{email}", "{EMAIL}"
-    ]
-
-    plain_text = clean_text
-    # 1. Clean markdown links for plain text fallback
-    clean_text = re.sub(r'\[([^\]]+)\]\((?:mailto:[^\)]+|https?://[^\)]+)\)', r'\1', clean_text)
-
-    plain_text = clean_text
-    for ph in name_placeholders:
-        plain_text = plain_text.replace(ph, r_name)
-    for ph in title_placeholders:
-        plain_text = plain_text.replace(ph, r_title)
-    if r_journal:
-        for ph in journal_placeholders:
-            plain_text = plain_text.replace(ph, r_journal)
-    for ph in email_placeholders:
-        plain_text = plain_text.replace(ph, r_email)
+    # Fallback argument mapping
+    if not name and 'r_name' in kwargs: name = kwargs['r_name']
+    if not title and 'r_title' in kwargs: title = kwargs['r_title']
+    if not email and 'r_email' in kwargs: email = kwargs['r_email']
+    if not journal_name and 'r_journal' in kwargs: journal_name = kwargs['r_journal']
 
     bold_style = "font-family: 'Times New Roman', Times, serif; font-weight: bold; font-size: 16px; color: #000000;"
-    bold_name = f"<b style=\"{bold_style}\"><font face=\"Times New Roman, Times, serif\" color=\"#000000\">{escape(r_name)}</font></b>"
-    bold_title = f"<b style=\"{bold_style}\"><font face=\"Times New Roman, Times, serif\" color=\"#000000\">{escape(r_title)}</font></b>"
-    bold_journal = f"<b style=\"{bold_style}\"><font face=\"Times New Roman, Times, serif\" color=\"#000000\">{escape(r_journal)}</font></b>" if r_journal else ""
 
-    # Replace markdown links before escaping other text
+    # Normalize row data dictionary for fuzzy key matching
+    normalized_row = {}
+    if row_data and isinstance(row_data, dict):
+        for k, v in row_data.items():
+            if v is not None and str(v).strip() != "" and str(v).lower() != "nan":
+                norm_k = re.sub(r'[\s_]+', '', str(k).lower())
+                normalized_row[norm_k] = str(v).strip()
+
+    if name:
+        normalized_row['name'] = name
+        normalized_row['author'] = name
+        normalized_row['authorname'] = name
+    if title:
+        normalized_row['title'] = title
+        normalized_row['papertitle'] = title
+        normalized_row['articletitle'] = title
+    if journal_name:
+        normalized_row['journal'] = journal_name
+        normalized_row['journalname'] = journal_name
+        normalized_row['publication'] = journal_name
+    if email:
+        normalized_row['email'] = email
+        normalized_row['emailaddress'] = email
+
+    # 1. Plain text substitution
+    clean_text = clean_to_plain_text(raw_template)
+    clean_text = re.sub(r'\[([^\]]+)\]\((?:mailto:[^\)]+|https?://[^\)]+)\)', r'\1', clean_text)
+
+    def repl_curly_plain(m):
+        raw_key = m.group(1).strip()
+        norm = re.sub(r'[\s_]+', '', raw_key.lower())
+        if norm in normalized_row:
+            return normalized_row[norm]
+        return raw_key
+
+    def repl_square_plain(m):
+        raw_key = m.group(1).strip()
+        norm = re.sub(r'[\s_\'\’]+', '', raw_key.lower())
+        if norm in normalized_row:
+            return normalized_row[norm]
+        elif 'journal' in norm and journal_name:
+            return journal_name
+        elif 'name' in norm and name:
+            return name
+        elif ('paper' in norm or 'title' in norm) and title:
+            return title
+        return raw_key
+
+    plain_text = re.sub(r'\[([^\]\n]+)\](?!\()', repl_square_plain, clean_text)
+    plain_text = re.sub(r'\{([^\}\n]+)\}', repl_curly_plain, plain_text)
+
+    # 2. Rich HTML substitution with bolding
+    # Protect markdown links before escaping
     html_work = raw_template
     link_map = {}
     def save_link(m):
@@ -228,30 +252,49 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
     for key, repl in link_map.items():
         escaped_template = escaped_template.replace(escape(key), repl)
 
-    html_content = escaped_template
-    for ph in name_placeholders:
-        html_content = html_content.replace(escape(ph), bold_name)
-    for ph in title_placeholders:
-        html_content = html_content.replace(escape(ph), bold_title)
-    if bold_journal:
-        for ph in journal_placeholders:
-            html_content = html_content.replace(escape(ph), bold_journal)
-    for ph in email_placeholders:
-        html_content = html_content.replace(escape(ph), escape(r_email))
+    # Replace square brackets e.g. [Journal Name], [Author's Name] with BOLD values
+    def repl_square_html(m):
+        raw_key = m.group(1).strip()
+        norm = re.sub(r'[\s_\'\’]+', '', raw_key.lower())
+        val = None
+        if norm in normalized_row:
+            val = normalized_row[norm]
+        elif 'journal' in norm and journal_name:
+            val = journal_name
+        elif 'name' in norm and name:
+            val = name
+        elif ('paper' in norm or 'title' in norm) and title:
+            val = title
+        if val is not None:
+            return f'<b style="{bold_style}"><font face="Times New Roman, Times, serif" color="#000000">{escape(val)}</font></b>'
+        return m.group(0)
 
-    # Automatically detect and bold journal names in text:
+    # Replace curly brackets: WHATEVER is inside {} becomes BOLD!
+    def repl_curly_html(m):
+        raw_key = m.group(1).strip()
+        norm = re.sub(r'[\s_]+', '', raw_key.lower())
+        if norm in normalized_row:
+            val = normalized_row[norm]
+        else:
+            # If not in spreadsheet columns, the content inside {} is literal text to bold!
+            val = raw_key
+        return f'<b style="{bold_style}"><font face="Times New Roman, Times, serif" color="#000000">{escape(val)}</font></b>'
+
+    html_content = re.sub(r'\[([^\]\n]+)\](?!\()', repl_square_html, escaped_template)
+    html_content = re.sub(r'\{([^\}\n]+)\}', repl_curly_html, html_content)
+
+    # Also automatically detect standalone Journal Names in text if not bracketed
     def bold_journal_pattern(m):
         txt = m.group(1).strip()
         return f'<b style="{bold_style}"><font face="Times New Roman, Times, serif" color="#000000">{txt}</font></b>'
 
-    # Match "Journal/Annals/Archives/Review/Letters of ..." inline
     html_content = re.sub(
         r'(?i)\b((?:(?:International|Global|American|European|Asian|World|British|Open|Clinical|National)\s+)?(?:Journal|Annals|Archives|Review|Letters)\s+of\s+[A-Za-z0-9\s,\'&-]+?(?:\s+(?:Letters|Reports|Review))?)(?=[\.,;:\n]|\s+[|]|\s+(?:for|to|with|in|by|which|where|and\s+its)\b|$)',
         bold_journal_pattern,
         html_content
     )
 
-    # 3. Intelligent Section & Paragraph Decomposition:
+    # 3. Intelligent Paragraph & Section Decomposition
     raw_lines = [l.strip() for l in html_content.splitlines() if l.strip()]
 
     salutation_block = []
@@ -286,19 +329,17 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         if mode == 'closing':
             closing_block.append(line)
 
-    # Divide body lines into balanced, spacious paragraphs:
     final_body_blocks = []
     curr_para = []
     for bl in body_lines:
         curr_para.append(bl)
-        # Check if bl ends a sentence
         if len(curr_para) >= 2 and re.search(r'[\.\?!]$', bl):
             final_body_blocks.append(" ".join(curr_para))
             curr_para = []
     if curr_para:
         final_body_blocks.append(" ".join(curr_para))
 
-    # Bold salutation strictly at the beginning of the salutation line
+    # Bold salutation prefix
     if salutation_block:
         s_line = salutation_block[0]
         s_line = re.sub(
@@ -308,11 +349,10 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         )
         salutation_block[0] = s_line
 
-    # Bold complimentary sign-off strictly on the sign-off line
+    # Bold complimentary sign-off lines
     if closing_block:
         c_lines_new = []
         for l in closing_block:
-            # Bold standalone journal names on sign-off lines
             m_j = re.match(r'^\s*([A-Za-z0-9\'&-]+(?:\s+[A-Za-z0-9\'&-]+){0,5}\s+(?:Journal|Review|Letters|Reports|Archives|Annals)(?:\s+of\s+[A-Za-z0-9\s,\'&-]+)?)\s*$', l, re.I)
             if m_j and not l.startswith("<b"):
                 l = f'<b style="{bold_style}"><font face="Times New Roman, Times, serif" color="#000000">{m_j.group(1)}</font></b>'
@@ -325,7 +365,7 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
             c_lines_new.append(l)
         closing_block = c_lines_new
 
-    # Reconstruct blocks into bulletproof table rows
+    # Reconstruct blocks into bulletproof Times New Roman table rows
     table_rows = []
     td_style = (
         "padding: 0 0 18px 0; "
@@ -337,21 +377,18 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         "text-align: left;"
     )
 
-    # 1. Salutation (clean 18px separation)
     if salutation_block:
         s_inner = "<br>\n".join(salutation_block)
         table_rows.append(
             f'<tr><td align="left" style="{td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000; line-height: 1.6;">{s_inner}</span></font></td></tr>'
         )
 
-    # 2. Dedicated Greetings Line (clean 18px separation)
     if greetings_block:
         g_inner = "<br>\n".join(greetings_block)
         table_rows.append(
             f'<tr><td align="left" style="{td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000; line-height: 1.6;">{g_inner}</span></font></td></tr>'
         )
 
-    # 3. Body Paragraphs (clean 18px separation per paragraph)
     for b_para in final_body_blocks:
         if not b_para.strip():
             continue
@@ -359,7 +396,6 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
             f'<tr><td align="left" style="{td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000; line-height: 1.6;">{b_para.strip()}</span></font></td></tr>'
         )
 
-    # 4. Closing & Sign-off Block (clean 10px top padding before sign-off)
     if closing_block:
         c_inner = "<br>\n".join(closing_block)
         closing_td_style = (
@@ -375,7 +411,6 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
             f'<tr><td align="left" style="{closing_td_style}"><font face="Times New Roman, Times, serif" size="3" color="#000000"><span style="font-family: \'Times New Roman\', Times, serif; font-size: 16px; color: #000000; line-height: 1.6;">{c_inner}</span></font></td></tr>'
         )
 
-    # 4. Professional Compliance Opt-Out Footer
     if include_optout:
         optout_td_style = (
             "padding: 24px 0 0 0; "
@@ -393,7 +428,6 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
         plain_text += '\n\n---\nIf you do not wish to receive future communications regarding this initiative, simply reply with "Unsubscribe" and your address will be promptly removed.'
 
     rows_html = "\n".join(table_rows)
-
     rich_html = (
         '<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" '
         'style="border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; '
@@ -405,6 +439,8 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
 
     return rich_html, plain_text
 
+# Aliases to guarantee no lookup errors
+build_formatted_email_content = format_email_body_html
 # =========================================================================
 # WEBMAIL PROVIDER CONFIGURATIONS & MULTI-ACCOUNT PROFILE MANAGER
 # =========================================================================
@@ -2012,16 +2048,22 @@ class ModernDarkZohoAutomationApp:
             chosen_body_tmpl = random.choice(body_tmpls)
             chosen_subj_tmpl = random.choice(subj_pool) if subj_pool else DEFAULT_SUBJECT
 
-            # Build HTML with Times New Roman and bold markers
+            # Build HTML with Times New Roman and bold markers (whatever is in {} brackets is BOLD)
             body_html, body_text = format_email_body_html(
                 chosen_body_tmpl,
                 name=r_name,
                 title=r_title,
                 journal_name=r_journal,
-                include_optout=include_optout
+                email=r_email,
+                include_optout=include_optout,
+                row_data=row.to_dict()
             )
 
-            subject = chosen_subj_tmpl.replace("{name}", r_name).replace("{title}", r_title).replace("{journal}", r_journal).strip()
+            subject = chosen_subj_tmpl
+            for k, v in [("{name}", r_name), ("{title}", r_title), ("{journal}", r_journal), ("{journal_name}", r_journal), ("{journal name}", r_journal)]:
+                subject = subject.replace(k, v)
+            # Replace any other {XYZ} in subject with its value or raw content
+            subject = re.sub(r'\{([^\}\n]+)\}', r'\1', subject).strip()
 
             self.log(f"[Account {acc_id}] Sending to Row {r_idx + 1}: {r_name} <{r_email}> | Subj: {subject[:40]}...")
 
@@ -2089,31 +2131,63 @@ class ModernDarkZohoAutomationApp:
         prov_info = WEBMAIL_PROVIDERS.get(provider_name, WEBMAIL_PROVIDERS["Zoho Mail"])
         self.log(f"[{provider_name}] Opening compose editor for: {to_email}")
 
-        # 1. Click Compose button
-        clicked = False
-        compose_selectors = prov_info.get("compose_selectors", [])
-        for sel in compose_selectors:
-            try:
-                btn = page.query_selector(sel)
-                if btn and btn.is_visible():
-                    btn.click()
+        # Helper to check if compose editor is currently visible on page
+        def is_composer_open(p):
+            for test_sel in [
+                "input[placeholder*='Subject' i]",
+                "input[data-testid*='subject-input']",
+                "#compose-subject",
+                "#mailSubject",
+                "input[placeholder*='To' i]",
+                "input[data-testid*='recipient-input']",
+                "#_to"
+            ]:
+                try:
+                    el = p.query_selector(test_sel)
+                    if el and el.is_visible():
+                        return True
+                except Exception:
+                    pass
+            return False
+
+        # 1. Click Compose button if not already open
+        if not is_composer_open(page):
+            clicked = False
+            compose_selectors = prov_info.get("compose_selectors", [])
+            for sel in compose_selectors:
+                try:
+                    btn = page.query_selector(sel)
+                    if btn and btn.is_visible():
+                        btn.click()
+                        clicked = True
+                        break
+                except Exception:
+                    pass
+
+            # Wait for composer to mount
+            for _ in range(8):
+                if is_composer_open(page):
                     clicked = True
                     break
-            except Exception:
-                pass
+                time.sleep(0.5)
 
-        if not clicked:
-            page.keyboard.press("Escape")
-            time.sleep(0.5)
-            shortcut = prov_info.get("compose_shortcut", "c")
-            page.keyboard.press(shortcut)
-            time.sleep(1)
-            if not page.query_selector("input[placeholder*='Subject' i], #mailSubject, #compose-subject, input[data-testid*='subject']"):
-                page.keyboard.press("c")
+            if not clicked:
+                page.keyboard.press("Escape")
+                time.sleep(0.3)
+                shortcut = prov_info.get("compose_shortcut", "c")
+                page.keyboard.press(shortcut)
+                time.sleep(1.0)
+                if not is_composer_open(page):
+                    page.keyboard.press("c")
+                    time.sleep(1.0)
 
-        time.sleep(2)
+            if not is_composer_open(page):
+                raise Exception(f"[{provider_name}] Unable to open compose dialog. Please check that mailbox is active.")
+
+        time.sleep(1.5)
 
         # 2. Locate and fill 'To' recipient field
+        self.log(f"[{provider_name}] Entering recipient: {to_email}")
         filled_to = False
         to_selectors = prov_info.get("to_selectors", [])
         for sel in to_selectors:
@@ -2121,9 +2195,15 @@ class ModernDarkZohoAutomationApp:
                 el = page.query_selector(sel)
                 if el and el.is_visible():
                     el.click()
+                    time.sleep(0.2)
                     el.fill(to_email)
                     time.sleep(0.3)
+                    # Commit chip token for Zoho and Titan
                     page.keyboard.press("Enter")
+                    time.sleep(0.2)
+                    page.keyboard.press(",")
+                    time.sleep(0.2)
+                    page.keyboard.press("Tab")
                     filled_to = True
                     break
             except Exception:
@@ -2134,19 +2214,27 @@ class ModernDarkZohoAutomationApp:
                 inputs = page.query_selector_all("input")
                 for inp in inputs:
                     ph = (inp.get_attribute("placeholder") or "").lower()
-                    if any(k in ph for k in ["contact", "recipient", "to", "email"]) and inp.is_visible():
+                    name_attr = (inp.get_attribute("name") or "").lower()
+                    if any(k in ph or k in name_attr for k in ["contact", "recipient", "to", "email"]) and inp.is_visible():
                         inp.click()
+                        time.sleep(0.2)
                         inp.fill(to_email)
                         time.sleep(0.3)
                         page.keyboard.press("Enter")
+                        page.keyboard.press(",")
+                        page.keyboard.press("Tab")
                         filled_to = True
                         break
             except Exception:
                 pass
 
+        if not filled_to:
+            raise Exception(f"[{provider_name}] Could not locate or fill recipient 'To' field for {to_email}.")
+
         time.sleep(0.8)
 
         # 3. Locate and fill Subject
+        self.log(f"[{provider_name}] Entering subject: {subject}")
         filled_subj = False
         subj_selectors = prov_info.get("subject_selectors", [])
         for sel in subj_selectors:
@@ -2154,6 +2242,7 @@ class ModernDarkZohoAutomationApp:
                 el = page.query_selector(sel)
                 if el and el.is_visible():
                     el.click()
+                    time.sleep(0.2)
                     el.fill(subject)
                     filled_subj = True
                     break
@@ -2165,8 +2254,10 @@ class ModernDarkZohoAutomationApp:
                 inputs = page.query_selector_all("input")
                 for inp in inputs:
                     ph = (inp.get_attribute("placeholder") or "").lower()
-                    if "subject" in ph and inp.is_visible():
+                    name_attr = (inp.get_attribute("name") or "").lower()
+                    if ("subject" in ph or "subject" in name_attr) and inp.is_visible():
                         inp.click()
+                        time.sleep(0.2)
                         inp.fill(subject)
                         filled_subj = True
                         break
@@ -2175,7 +2266,8 @@ class ModernDarkZohoAutomationApp:
 
         time.sleep(0.8)
 
-        # 4. Locate and fill formatted Message Body strictly in Times New Roman with bold placeholders
+        # 4. Locate and fill formatted Message Body strictly in Times New Roman with bold markers
+        self.log(f"[{provider_name}] Inserting formatted body (Times New Roman with bold brackets)...")
         filled_body = False
 
         # A. Try rich injection inside iframe first (Zoho editor or Roundcube TinyMCE)
@@ -2210,7 +2302,7 @@ class ModernDarkZohoAutomationApp:
                                 document.body.style.setProperty('font-family', "'Times New Roman', Times, Georgia, serif", 'important');
                                 document.body.style.setProperty('font-size', '16px', 'important');
                                 document.body.style.setProperty('color', '#000000', 'important');
-                                document.body.style.setProperty('line-height', '1.5', 'important');
+                                document.body.style.setProperty('line-height', '1.6', 'important');
 
                                 document.body.querySelectorAll('*').forEach(node => {
                                     node.style.setProperty('font-family', "'Times New Roman', Times, Georgia, serif", 'important');
@@ -2270,7 +2362,7 @@ class ModernDarkZohoAutomationApp:
                                     e.style.setProperty('font-family', "'Times New Roman', Times, Georgia, serif", 'important');
                                     e.style.setProperty('font-size', '16px', 'important');
                                     e.style.setProperty('color', '#000000', 'important');
-                                    e.style.setProperty('line-height', '1.5', 'important');
+                                    e.style.setProperty('line-height', '1.6', 'important');
 
                                     e.querySelectorAll('*').forEach(node => {
                                         node.style.setProperty('font-family', "'Times New Roman', Times, Georgia, serif", 'important');
@@ -2334,6 +2426,7 @@ class ModernDarkZohoAutomationApp:
         time.sleep(1.0)
 
         # 5. Click Send
+        self.log(f"[{provider_name}] Clicking Send button...")
         clicked_send = False
         send_selectors = prov_info.get("send_selectors", [])
         for sel in send_selectors:
@@ -2347,9 +2440,10 @@ class ModernDarkZohoAutomationApp:
                 pass
 
         if not clicked_send:
+            self.log(f"[{provider_name}] Using Control+Enter dispatch shortcut...")
             page.keyboard.press("Control+Enter")
 
-        time.sleep(3.5)
+        time.sleep(4.0)
 
     def _on_close(self):
         try:
