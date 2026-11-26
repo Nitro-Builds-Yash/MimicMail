@@ -399,14 +399,181 @@ def build_formatted_email_content(raw_template: str, r_name: str, r_title: str, 
 
     return rich_html, plain_text
 
-# Persistent Chromium Browser Profile Directory
-PROFILE_DIR = os.path.join(APP_BASE_DIR, "zoho_browser_profile")
-# Compatibility check: if zoho_browser_profiles/instance_1 exists and has data, fallback or initialize
-if not os.path.exists(PROFILE_DIR):
-    legacy_inst1 = os.path.join(APP_BASE_DIR, "zoho_browser_profiles", "instance_1")
-    if os.path.exists(legacy_inst1):
-        PROFILE_DIR = legacy_inst1
-os.makedirs(PROFILE_DIR, exist_ok=True)
+# =========================================================================
+# WEBMAIL PROVIDER CONFIGURATIONS & MULTI-ACCOUNT PROFILE MANAGER
+# =========================================================================
+WEBMAIL_PROVIDERS = {
+    "Zoho Mail": {
+        "name": "Zoho Mail",
+        "default_url": "https://mail.zoho.com/zm/",
+        "domain_keywords": ["zoho.com", "mail.zoho"],
+        "compose_selectors": [
+            "button[title*='New Mail' i]",
+            "button:has-text('New Mail')",
+            "button.zmBtn_primary[title*='New Mail']",
+            "button:has-text('Compose Mail')",
+            "button:has-text('Compose')",
+            "[data-test-id='compose-mail']",
+            "button[aria-label='New Mail']"
+        ],
+        "compose_shortcut": "m",
+        "to_selectors": [
+            "input[placeholder*='Add contact' i]",
+            "input[placeholder*='to' i]",
+            "div[data-name='to'] input",
+            "#mailTo input",
+            ".select2-search__field",
+            "input[aria-label*='To' i]",
+            "div[contenteditable='true'][aria-label*='To' i]"
+        ],
+        "subject_selectors": [
+            "input[placeholder*='Subject' i]",
+            "input[aria-label*='Subject' i]",
+            "input[name='subject']",
+            "#mailSubject"
+        ],
+        "body_selectors": [
+            "div[contenteditable='true'][aria-label*='Message body' i]",
+            "div[contenteditable='true'][aria-label*='body' i]",
+            "div[contenteditable='true'][aria-label*='Mail' i]",
+            "#mailContent",
+            ".zmMailContent",
+            "[data-test-id='mail-compose-body']",
+            ".zmComposeBody",
+            "div[contenteditable='true']"
+        ],
+        "send_selectors": [
+            "button[title*='Send' i]",
+            "button:has-text('Send')",
+            "span:text-is('Send')",
+            "[data-test-id='send-button']",
+            ".zmBtn.zmBtn_primary:has-text('Send')"
+        ],
+        "send_shortcut": "Control+Enter"
+    },
+    "BigRock Titan Email": {
+        "name": "BigRock Titan Email",
+        "default_url": "https://app.titan.email",
+        "domain_keywords": ["titan.email", "bigrock.titan"],
+        "compose_selectors": [
+            "button:has-text('Compose')",
+            "button[data-testid*='compose' i]",
+            "button[aria-label*='Compose' i]",
+            "[data-qa='compose-btn']",
+            "button:has-text('New Email')",
+            "button:has-text('New Message')"
+        ],
+        "compose_shortcut": "c",
+        "to_selectors": [
+            "input[placeholder*='To' i]",
+            "input[data-testid*='recipient-input']",
+            "input[data-testid*='to' i]",
+            "div[data-testid*='to' i] input",
+            "input[aria-label*='To' i]",
+            "input[name='to']"
+        ],
+        "subject_selectors": [
+            "input[placeholder*='Subject' i]",
+            "input[data-testid*='subject-input']",
+            "input[name='subject']",
+            "input[aria-label*='Subject' i]"
+        ],
+        "body_selectors": [
+            "div[contenteditable='true'][data-testid*='editor' i]",
+            "div[contenteditable='true'][aria-label*='Message' i]",
+            "div[contenteditable='true'][role='textbox']",
+            "div[contenteditable='true']"
+        ],
+        "send_selectors": [
+            "button[data-testid*='send' i]",
+            "button:has-text('Send')",
+            "button[aria-label*='Send' i]",
+            "[data-qa='send-btn']"
+        ],
+        "send_shortcut": "Control+Enter"
+    },
+    "BigRock Webmail": {
+        "name": "BigRock Webmail",
+        "default_url": "https://webmail.bigrock.in",
+        "domain_keywords": ["webmail", "roundcube"],
+        "compose_selectors": [
+            "a.button-compose",
+            "a:has-text('Compose')",
+            "#rcmbtn101",
+            "[data-action='compose']",
+            "a[title*='Compose' i]",
+            "button:has-text('Compose')",
+            "button[title*='Compose' i]"
+        ],
+        "compose_shortcut": "c",
+        "to_selectors": [
+            "#_to",
+            "textarea[name='_to']",
+            "input[name='_to']",
+            "#compose-to input",
+            "input[id*='to' i]"
+        ],
+        "subject_selectors": [
+            "#compose-subject",
+            "input[name='_subject']",
+            "#_subject",
+            "input[id*='subject' i]"
+        ],
+        "body_selectors": [
+            "iframe#composebody_ifr",
+            "#composebody",
+            "textarea[name='_message']",
+            "body#tinymce",
+            "div[contenteditable='true']"
+        ],
+        "send_selectors": [
+            "#rcmbtn107",
+            "a.button-send",
+            "button:has-text('Send')",
+            "a:has-text('Send')",
+            "input[value='Send']",
+            "button[id*='send' i]"
+        ],
+        "send_shortcut": "Control+Enter"
+    }
+}
+
+def get_account_profile_dir(acc_num: int) -> str:
+    """Returns isolated persistent profile directory for Account 1, 2, or 3."""
+    base_dir = os.path.join(APP_BASE_DIR, "mimicmail_browser_profiles")
+    os.makedirs(base_dir, exist_ok=True)
+    acc_path = os.path.join(base_dir, f"account_{acc_num}")
+    if acc_num == 1 and not os.path.exists(acc_path):
+        legacy = os.path.join(APP_BASE_DIR, "zoho_browser_profile")
+        if os.path.exists(legacy) and os.listdir(legacy):
+            return legacy
+        legacy_inst1 = os.path.join(APP_BASE_DIR, "zoho_browser_profiles", "instance_1")
+        if os.path.exists(legacy_inst1) and os.listdir(legacy_inst1):
+            return legacy_inst1
+    os.makedirs(acc_path, exist_ok=True)
+    return acc_path
+
+def clean_profile_locks(profile_dir: str):
+    """Safely sweeps stale Chromium process locks to guarantee glitch-free, clean browser launch."""
+    for lock_name in ["SingletonLock", "SingletonSocket", "SingletonCookie", "lockfile"]:
+        lp = os.path.join(profile_dir, lock_name)
+        if os.path.exists(lp):
+            try:
+                os.remove(lp)
+            except Exception:
+                pass
+
+def _ensure_chromium_installed():
+    """Automatically ensures Playwright Chromium browser binary is present."""
+    try:
+        from playwright._impl._driver import compute_driver_executable
+        import subprocess
+        driver_exec, driver_cli = compute_driver_executable()
+        subprocess.run([driver_exec, driver_cli, "install", "chromium"], capture_output=True, text=True, timeout=120)
+    except Exception:
+        pass
+
+PROFILE_DIR = get_account_profile_dir(1)
 
 # =========================================================================
 # LICENSE & 30-DAY / 5-DAY COOLING PERIOD MANAGER
@@ -518,7 +685,7 @@ def apply_admin_unlock(code: str) -> bool:
 class ModernDarkZohoAutomationApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("MimicMail — Zoho Outreach Automation")
+        self.root.title("MimicMail — Webmail Outreach Automation (Zoho, BigRock Titan & BigRock Webmail)")
         self.root.geometry("940x920")
         self.root.minsize(840, 800)
 
@@ -531,10 +698,16 @@ class ModernDarkZohoAutomationApp:
         self.subject_lines_pool = []
         self.subjects_file_path = None
 
-        # Thread-safe queues and background worker
-        self.cmd_queue = queue.Queue()
+        # Multi-Account Thread-Safe Queues & Worker Threads
+        self.account_queues = {1: queue.Queue(), 2: queue.Queue(), 3: queue.Queue()}
+        self.account_threads = {}
+        self.cmd_queue = self.account_queues[1]  # Backward compatibility alias
         self.ui_queue = queue.Queue()
-        self.worker_thread = None
+        self.active_workers_count = 0
+        self.total_session_sent = 0
+        self._stats_lock = threading.Lock()
+        self.seen_emails_lock = threading.Lock()
+        self.seen_emails_in_session = set()
 
         self._apply_dark_theme()
         self._build_ui()
@@ -575,13 +748,17 @@ class ModernDarkZohoAutomationApp:
         """Enqueues a function to be executed safely on the Tkinter main thread."""
         self.ui_queue.put(("EXEC", func))
 
-    def _ensure_worker_started(self):
-        try:
-            if not hasattr(self, "worker_thread") or not self.worker_thread or not self.worker_thread.is_alive():
-                self.worker_thread = threading.Thread(target=self._dedicated_browser_thread, daemon=True)
-                self.worker_thread.start()
-        except Exception as e:
-            self.log(f"Worker startup notice: {e}")
+    def _ensure_worker_started(self, acc_id: int = None):
+        targets = [acc_id] if acc_id else [1, 2, 3]
+        for aid in targets:
+            try:
+                t = self.account_threads.get(aid)
+                if not t or not t.is_alive():
+                    th = threading.Thread(target=lambda a=aid: self._account_worker_loop(a), daemon=True)
+                    self.account_threads[aid] = th
+                    th.start()
+            except Exception as e:
+                self.log(f"Account {aid} worker startup notice: {e}")
 
     # Aliases to guarantee no attribute lookup errors regardless of underscore convention
     _ensure_workerstarted = _ensure_worker_started
@@ -714,26 +891,70 @@ class ModernDarkZohoAutomationApp:
         left_col = ttk.Frame(main_columns, style="Root.TFrame")
         left_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
 
-        # Card 1: Webmail Session & Spreadsheet Ingestion (Top action buttons parallel, info below)
-        setup_card = ttk.LabelFrame(left_col, text="  1. Session & Recipient Registry  ", style="DarkCard.TLabelframe", padding="12")
+        # Card 1: Webmail Session & Account Management (Supports Zoho, BigRock Titan, BigRock Webmail)
+        setup_card = ttk.LabelFrame(left_col, text="  1. Webmail Session & Account Management  ", style="DarkCard.TLabelframe", padding="12")
         setup_card.pack(fill=tk.X, pady=(0, 10))
 
-        # Top Button Row: Launch Zoho on left corner, Browse Excel on right corner
-        btn_row = ttk.Frame(setup_card, style="Card.TFrame")
-        btn_row.pack(fill=tk.X, pady=(0, 6))
+        # Row 1: Webmail Provider & Target URL
+        prov_row = ttk.Frame(setup_card, style="Card.TFrame")
+        prov_row.pack(fill=tk.X, pady=(0, 5))
 
-        self.login_btn = ttk.Button(btn_row, text="🌐 Launch Zoho Webmail", command=self.request_open_browser, style="ActionBlue.TButton")
+        ttk.Label(prov_row, text="Webmail Provider:", style="Dark.TLabel").pack(side=tk.LEFT)
+        self.provider_combo = ttk.Combobox(
+            prov_row,
+            values=["Zoho Mail", "BigRock Titan Email", "BigRock Webmail"],
+            state="readonly",
+            width=18
+        )
+        self.provider_combo.set("Zoho Mail")
+        self.provider_combo.pack(side=tk.LEFT, padx=(6, 12))
+        self.provider_combo.bind("<<ComboboxSelected>>", self._on_provider_changed)
+
+        ttk.Label(prov_row, text="URL:", style="Dark.TLabel").pack(side=tk.LEFT)
+        self.webmail_url_entry = tk.Entry(
+            prov_row,
+            bg="#ffffff",
+            fg="#111827",
+            font=("Segoe UI", 9),
+            relief="flat",
+            highlightbackground=self.border_card,
+            highlightcolor="#000000",
+            highlightthickness=1
+        )
+        self.webmail_url_entry.insert(0, WEBMAIL_PROVIDERS["Zoho Mail"]["default_url"])
+        self.webmail_url_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 0), ipady=2)
+
+        # Row 2: Account Login Selector & Excel Browse
+        btn_row = ttk.Frame(setup_card, style="Card.TFrame")
+        btn_row.pack(fill=tk.X, pady=(2, 6))
+
+        ttk.Label(btn_row, text="Select Account:", style="Dark.TLabel").pack(side=tk.LEFT)
+        self.acc_select_combo = ttk.Combobox(
+            btn_row,
+            values=["Account 1", "Account 2", "Account 3"],
+            state="readonly",
+            width=11
+        )
+        self.acc_select_combo.set("Account 1")
+        self.acc_select_combo.pack(side=tk.LEFT, padx=(6, 8))
+
+        self.login_btn = ttk.Button(btn_row, text="🌐 Launch & Login Selected Account", command=self.request_open_selected_account, style="ActionBlue.TButton")
         self.login_btn.pack(side=tk.LEFT)
 
         self.browse_btn = ttk.Button(btn_row, text="📁 Browse Excel (.xlsx)", command=self.browse_excel, style="ActionBlue.TButton")
         self.browse_btn.pack(side=tk.RIGHT)
 
-        # Bottom Info Row: Session indicator on left, loaded file status on right
+        # Row 3: Account Status Badges & Registry Status
         info_row = ttk.Frame(setup_card, style="Card.TFrame")
-        info_row.pack(fill=tk.X)
+        info_row.pack(fill=tk.X, pady=(2, 0))
 
-        self.session_indicator = tk.Label(info_row, text="● Browser: Ready", bg="#ffffff", fg=self.fg_muted, font=("Segoe UI", 9, "bold"))
-        self.session_indicator.pack(side=tk.LEFT)
+        self.acc_indicators = {}
+        for aid in range(1, 4):
+            lbl = tk.Label(info_row, text=f"● Acct {aid}: Ready", bg="#f3f4f6", fg=self.fg_muted, font=("Segoe UI", 8, "bold"), padx=5, pady=2, highlightbackground="#e5e7eb", highlightthickness=1)
+            lbl.pack(side=tk.LEFT, padx=(0, 6))
+            self.acc_indicators[aid] = lbl
+
+        self.session_indicator = self.acc_indicators[1]
 
         self.file_label = ttk.Label(info_row, text="📄 No registry loaded (Required: email, author name, title)", style="DarkMuted.TLabel")
         self.file_label.pack(side=tk.RIGHT)
@@ -830,14 +1051,24 @@ class ModernDarkZohoAutomationApp:
                                             variable=self.jitter_var, style="Dark.TCheckbutton")
         self.jitter_check.pack(anchor=tk.W)
 
-        # Multi-tab concurrency setting (Optimized for 4GB - 8GB RAM)
+        # Multi-Account Concurrency Setting (Parallel run across up to 3 mail accounts)
         tab_row = ttk.Frame(pacing_box, style="Card.TFrame")
         tab_row.pack(fill=tk.X, pady=(6, 2))
-        ttk.Label(tab_row, text="⚡ Parallel Background Tabs:", style="Dark.TLabel").pack(side=tk.LEFT)
-        self.tabs_var = tk.IntVar(value=1)
-        self.tabs_spin = ttk.Spinbox(tab_row, from_=1, to=2, textvariable=self.tabs_var, width=5, state="readonly")
-        self.tabs_spin.pack(side=tk.RIGHT)
-        ttk.Label(pacing_box, text="(Hardware-safe concurrency: 1 or 2 tabs)", style="DarkMuted.TLabel").pack(anchor=tk.W)
+        ttk.Label(tab_row, text="⚡ Parallel Run Accounts:", style="Dark.TLabel").pack(side=tk.LEFT)
+        self.parallel_accounts_var = tk.StringVar(value="3 Accounts Parallel (Fastest Outreach)")
+        self.parallel_accounts_combo = ttk.Combobox(
+            tab_row,
+            textvariable=self.parallel_accounts_var,
+            values=[
+                "3 Accounts Parallel (Fastest Outreach)",
+                "2 Accounts Parallel",
+                "1 Account (Single)"
+            ],
+            state="readonly",
+            width=26
+        )
+        self.parallel_accounts_combo.pack(side=tk.RIGHT)
+        ttk.Label(pacing_box, text="(Dispatches across up to 3 separate mail accounts concurrently)", style="DarkMuted.TLabel").pack(anchor=tk.W)
 
         # 40-Mail Chunk Rest Interval Selector (1 hr, 1.5 hr, 2 hr, 3 hr)
         chunk_rest_row = ttk.Frame(pacing_box, style="Card.TFrame")
@@ -1098,9 +1329,28 @@ class ModernDarkZohoAutomationApp:
         else:
             print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {text}")
 
-    def request_open_browser(self):
-        self._ensure_worker_started()
-        self.cmd_queue.put(("OPEN_BROWSER", None))
+    def _on_provider_changed(self, event=None):
+        prov = self.provider_combo.get()
+        if prov in WEBMAIL_PROVIDERS:
+            default_url = WEBMAIL_PROVIDERS[prov]["default_url"]
+            self.webmail_url_entry.delete(0, tk.END)
+            self.webmail_url_entry.insert(0, default_url)
+            self.log(f"Switched webmail provider: {prov} -> {default_url}")
+
+    def request_open_selected_account(self):
+        sel = self.acc_select_combo.get()
+        aid = 1
+        if "2" in sel:
+            aid = 2
+        elif "3" in sel:
+            aid = 3
+        self.request_open_browser(aid)
+
+    def request_open_browser(self, acc_id: int = 1):
+        self._ensure_worker_started(acc_id)
+        prov = self.provider_combo.get() if hasattr(self, "provider_combo") else "Zoho Mail"
+        url = self.webmail_url_entry.get().strip() if hasattr(self, "webmail_url_entry") else WEBMAIL_PROVIDERS.get(prov, {}).get("default_url", "https://mail.zoho.com/zm/")
+        self.account_queues[acc_id].put(("OPEN_BROWSER", {"provider_name": prov, "url": url}))
 
     def browse_excel(self):
         path = filedialog.askopenfilename(
@@ -1309,19 +1559,17 @@ class ModernDarkZohoAutomationApp:
                 messagebox.showwarning("File Missing", "Please select an Excel workbook first using 'Browse Excel (.xlsx)'.")
                 return
 
-            # Check subject lines: Strictly required to be uploaded via .txt file
             subj_pool = list(self.subject_lines_pool) if self.subject_lines_pool else []
             if not subj_pool:
                 messagebox.showwarning(
                     "Subject File Required",
                     "Please upload a .txt file containing subject lines using the '📄 Upload .txt Subjects' button.\n\n"
-                    "The tool randomly selects a subject from this file for each email and does not use the title column."
+                    "The tool randomly selects a subject from this file for each email."
                 )
                 return
 
-            # Gather all non-empty user templates across the 3 slots
             active_templates = []
-            for i, txt_widget in enumerate(self.template_text_widgets):
+            for txt_widget in self.template_text_widgets:
                 content = txt_widget.get("1.0", tk.END).strip()
                 if content:
                     active_templates.append(content)
@@ -1330,26 +1578,74 @@ class ModernDarkZohoAutomationApp:
                 messagebox.showwarning("No Templates", "Please provide at least 1 template in the 3 slots (paste HTML or load a file).")
                 return
 
-            self.log(f"Verified {len(active_templates)} template(s) and {len(subj_pool)} uploaded subject line(s). Random picker active.")
+            # Read Excel to identify pending recipients
+            df = pd.read_excel(self.excel_file_path)
+            total_records = len(df)
+            has_status_col = any(c.strip().lower() == "status" for c in df.columns)
+            if has_status_col:
+                status_col_name = next(c for c in df.columns if c.strip().lower() == "status")
+                status_series = df[status_col_name].astype(str).str.strip().str.upper()
+                pending_indices = [i for i, val in enumerate(status_series) if val != "SENT"]
+            else:
+                pending_indices = list(range(total_records))
+
+            if not pending_indices:
+                messagebox.showinfo("Completed", "All recipients in this spreadsheet are already sent!")
+                return
+
+            # Determine concurrency mode (1, 2, or 3 accounts)
+            concur_mode = self.parallel_accounts_combo.get() if hasattr(self, "parallel_accounts_combo") else "3 Accounts"
+            if "1" in concur_mode:
+                active_accounts = [1]
+            elif "2" in concur_mode:
+                active_accounts = [1, 2]
+            else:
+                active_accounts = [1, 2, 3]
+
+            prov = self.provider_combo.get() if hasattr(self, "provider_combo") else "Zoho Mail"
+            url = self.webmail_url_entry.get().strip() if hasattr(self, "webmail_url_entry") else WEBMAIL_PROVIDERS.get(prov, {}).get("default_url", "https://mail.zoho.com/zm/")
 
             self.is_running = True
             self.stop_requested = False
             self._toggle_ui(running=True)
 
+            self.seen_emails_in_session.clear()
+            self.total_session_sent = 0
+            self.active_workers_count = len(active_accounts)
+
+            # Build thread-safe synchronized task queue
+            task_queue = queue.Queue()
+            for r_idx in pending_indices:
+                task_queue.put(r_idx)
+
             params = {
+                "provider_name": prov,
+                "url": url,
                 "subj_pool": subj_pool,
                 "body_tmpls": active_templates,
                 "base_mins": self.interval_var.get(),
                 "use_jitter": self.jitter_var.get(),
                 "excel_path": self.excel_file_path,
-                "parallel_tabs": max(1, self.tabs_var.get()),
                 "include_optout": self.optout_var.get(),
                 "deduplicate_emails": self.dedup_var.get(),
                 "chunk_rest_hours": max(1.0, float(self.chunk_rest_hours_var.get())),
-                "max_session_cap": max(1, int(self.session_cap_var.get()))
+                "max_session_cap": max(1, int(self.session_cap_var.get())),
+                "total_pending": len(pending_indices)
             }
-            self._ensure_worker_started()
-            self.cmd_queue.put(("START_AUTOMATION", params))
+
+            self.log(f"=== Starting Automation: {len(pending_indices)} pending emails | {len(active_accounts)} Parallel Account(s) ({prov}) ===")
+            self.ui_dispatch(lambda tp=len(pending_indices), nw=len(active_accounts): self.timer_display.config(
+                text=f"🚀 Active: {tp} Pending across {nw} Accounts", fg="#15803d"
+            ))
+
+            for aid in active_accounts:
+                self._ensure_worker_started(aid)
+                self.account_queues[aid].put(("START_BATCH", {
+                    "task_queue": task_queue,
+                    "params": params,
+                    "df": df
+                }))
+
         except Exception as e:
             self.is_running = False
             self.stop_requested = False
@@ -1369,33 +1665,23 @@ class ModernDarkZohoAutomationApp:
         self.browse_btn.config(state=tk.DISABLED if running else tk.NORMAL)
 
     # =========================================================================
-    # SINGLE DEDICATED PLAYWRIGHT WORKER THREAD
-    # All Playwright calls stay inside this thread forever, preventing Greenlet errors!
+    # DEDICATED MULTI-ACCOUNT WORKER LOOPS (ONE PER ACCOUNT, ZERO GREENLET ERRORS)
     # =========================================================================
-    def _dedicated_browser_thread(self):
+    def _account_worker_loop(self, acc_id: int):
+        profile_dir = get_account_profile_dir(acc_id)
         playwright_instance = None
         browser_context = None
         browser_page = None
 
-        # Automatically check and install Playwright Chromium if missing on target machine
-        try:
-            from playwright._impl._driver import compute_driver_executable
-            import subprocess
-            driver_exec, driver_cli = compute_driver_executable()
-            # If driver exists, check whether chromium needs to be installed
-            # Running 'install chromium' ensures any clean machine runs out of the box
-            res = subprocess.run([driver_exec, driver_cli, "install", "chromium"], capture_output=True, text=True, timeout=120)
-            if res.returncode == 0:
-                self.log("✓ Chromium browser environment verified.")
-        except Exception as e:
-            self.log(f"Chromium check notice: {e}")
+        _ensure_chromium_installed()
 
         try:
             playwright_instance = sync_playwright().start()
+            q = self.account_queues[acc_id]
 
             while True:
                 try:
-                    cmd, data = self.cmd_queue.get(timeout=0.2)
+                    cmd, data = q.get(timeout=0.2)
                 except queue.Empty:
                     continue
 
@@ -1404,22 +1690,16 @@ class ModernDarkZohoAutomationApp:
 
                 elif cmd == "OPEN_BROWSER":
                     try:
-                        active_profile_dir = PROFILE_DIR
-                        # Clean up any stale singleton locks if browser process died uncleanly
-                        for lock_name in ["SingletonLock", "SingletonSocket", "SingletonCookie", "lockfile"]:
-                            lock_path = os.path.join(active_profile_dir, lock_name)
-                            if os.path.exists(lock_path):
-                                try:
-                                    os.remove(lock_path)
-                                except Exception:
-                                    pass
+                        provider_name = data.get("provider_name", "Zoho Mail")
+                        url = data.get("url", WEBMAIL_PROVIDERS.get(provider_name, {}).get("default_url"))
 
+                        clean_profile_locks(profile_dir)
                         if not (browser_context and browser_page and not browser_page.is_closed()):
-                            self.log("Opening persistent Chromium browser...")
-                            self.ui_dispatch(lambda: self.session_indicator.config(text="● Launching...", fg="#000000"))
+                            self.log(f"[Account {acc_id}] Launching persistent Chromium browser ({provider_name})...")
+                            self.ui_dispatch(lambda a=acc_id: self.acc_indicators[a].config(text=f"● Acct {a}: Launching...", fg="#000000", bg="#fef08a"))
 
                             browser_context = playwright_instance.chromium.launch_persistent_context(
-                                user_data_dir=active_profile_dir,
+                                user_data_dir=profile_dir,
                                 headless=False,
                                 no_viewport=True,
                                 timeout=60000,
@@ -1431,48 +1711,43 @@ class ModernDarkZohoAutomationApp:
                                     "--no-sandbox",
                                     "--disable-infobars",
                                     "--disable-dev-shm-usage",
-                                    "--disable-gpu"
+                                    "--disable-gpu",
+                                    "--no-first-run",
+                                    "--no-default-browser-check"
                                 ]
                             )
-                            # Inject stealth script into all frames on creation
                             browser_context.add_init_script(STEALTH_INIT_SCRIPT)
-
                             browser_page = browser_context.pages[0] if browser_context.pages else browser_context.new_page()
-                            try:
-                                browser_page.goto("https://mail.zoho.com/zm/", timeout=60000, wait_until="domcontentloaded")
-                            except Exception as nav_e:
-                                self.log(f"Navigation warning (will proceed): {nav_e}")
 
-                            self.log("Browser is open! Please log in if prompted and leave this window open.")
-                            self.ui_dispatch(lambda: self.session_indicator.config(text="● Active & Connected", fg=self.accent_red))
+                            try:
+                                browser_page.goto(url, timeout=60000, wait_until="domcontentloaded")
+                            except Exception as nav_e:
+                                self.log(f"[Account {acc_id}] Navigation warning: {nav_e}")
+
+                            self.log(f"[Account {acc_id}] Browser is open! Please log into {provider_name} if prompted.")
+                            self.ui_dispatch(lambda a=acc_id: self.acc_indicators[a].config(text=f"● Acct {a}: Logged In / Active", fg="#15803d", bg="#dcfce7"))
                         else:
-                            self.log("Browser already open. Bringing tab to front...")
+                            self.log(f"[Account {acc_id}] Browser already open. Bringing to front...")
                             browser_page.bring_to_front()
                     except Exception as err:
                         err_msg = str(err)
-                        self.log(f"Open browser error: {err_msg}")
-                        if "ProcessSingleton" in err_msg or "Target page, context or browser has been closed" in err_msg or "locked" in err_msg.lower():
-                            self.log("💡 Tip: A browser window is already open. Close existing Chromium windows and retry.")
-                        self.ui_dispatch(lambda: self.session_indicator.config(text="● Open Error (Check Logs)", fg=self.accent_red))
-                        self.ui_dispatch(lambda m=err_msg: messagebox.showerror("Browser Launch Error", f"Unable to launch browser:\n\n{m[:200]}\n\nIf another browser window is already using this profile, please close it and try again."))
+                        self.log(f"[Account {acc_id}] Browser launch error: {err_msg}")
+                        self.ui_dispatch(lambda a=acc_id: self.acc_indicators[a].config(text=f"● Acct {a}: Error", fg="#dc2626", bg="#fee2e2"))
+                        self.ui_dispatch(lambda m=err_msg, a=acc_id: messagebox.showerror(f"Account {a} Browser Error", f"Unable to launch browser for Account {a}:\n\n{m[:250]}\n\nIf another window is using this profile, please close it and retry."))
 
-                elif cmd == "START_AUTOMATION":
+                elif cmd == "START_BATCH":
+                    task_queue = data["task_queue"]
+                    params = data["params"]
+                    df = data["df"]
+                    provider_name = params.get("provider_name", "Zoho Mail")
+                    url = params.get("url", WEBMAIL_PROVIDERS.get(provider_name, {}).get("default_url"))
+
                     try:
-                        active_profile_dir = PROFILE_DIR
-                        # Clean up locks in START_AUTOMATION as well
-                        for lock_name in ["SingletonLock", "SingletonSocket", "SingletonCookie", "lockfile"]:
-                            lock_path = os.path.join(active_profile_dir, lock_name)
-                            if os.path.exists(lock_path):
-                                try:
-                                    os.remove(lock_path)
-                                except Exception:
-                                    pass
-
-                        # 1. Ensure browser is open in this same thread with full stealth parameters
+                        clean_profile_locks(profile_dir)
                         if not (browser_context and browser_page and not browser_page.is_closed()):
-                            self.log("Opening browser session...")
+                            self.log(f"[Account {acc_id}] Opening browser session for outreach...")
                             browser_context = playwright_instance.chromium.launch_persistent_context(
-                                user_data_dir=active_profile_dir,
+                                user_data_dir=profile_dir,
                                 headless=False,
                                 no_viewport=True,
                                 timeout=60000,
@@ -1484,7 +1759,9 @@ class ModernDarkZohoAutomationApp:
                                     "--no-sandbox",
                                     "--disable-infobars",
                                     "--disable-dev-shm-usage",
-                                    "--disable-gpu"
+                                    "--disable-gpu",
+                                    "--no-first-run",
+                                    "--no-default-browser-check"
                                 ]
                             )
                             browser_context.add_init_script(STEALTH_INIT_SCRIPT)
@@ -1492,113 +1769,21 @@ class ModernDarkZohoAutomationApp:
 
                         browser_page.bring_to_front()
 
-                        # Helper to check if Zoho Mail UI is ready
-                        def is_mailbox_ready(page):
-                            try:
-                                return bool(page.query_selector("button[title*='New Mail' i], .zmNavMail, #zm_mail, [data-app='mail']"))
-                            except Exception:
-                                return False
+                        # Ensure logged in and in mailbox
+                        self._ensure_inbox_ready(browser_page, provider_name, url, acc_id)
+                        self.ui_dispatch(lambda a=acc_id: self.acc_indicators[a].config(text=f"● Acct {a}: Automating", fg="#2563eb", bg="#dbeafe"))
 
-                        # If page is empty / about:blank, navigate to Zoho Mail
-                        curr_url = browser_page.url.lower()
-                        if curr_url.startswith("about:") or not curr_url:
-                            self.log("Navigating browser to Zoho Mail: https://mail.zoho.com/zm/ ...")
-                            try:
-                                browser_page.goto("https://mail.zoho.com/zm/", timeout=60000, wait_until="domcontentloaded")
-                            except Exception as nav_e:
-                                self.log(f"Navigation notice: {nav_e}")
-                            time.sleep(3)
-                            curr_url = browser_page.url.lower()
-
-                        self.log(f"Current page URL: {curr_url}")
-
-                        # Check if user is currently on login / accounts / 2FA screen
-                        if "accounts.zoho" in curr_url or "signin" in curr_url or "login" in curr_url:
-                            self.log("⚠️ Zoho Login/Verification detected. Waiting for you to complete sign-in in the browser...")
-                            self.ui_dispatch(lambda: self.session_indicator.config(text="● Waiting for Login...", fg="#000000"))
-                            # Wait up to 180 seconds for login to finish and reach mail.zoho
-                            logged_in = False
-                            for _ in range(90):
-                                if self.stop_requested:
-                                    break
-                                time.sleep(2)
-                                try:
-                                    u = browser_page.url.lower()
-                                    if "mail.zoho" in u and "accounts.zoho" not in u:
-                                        logged_in = True
-                                        self.log("Login detected! Waiting for Zoho Mail app to initialize...")
-                                        time.sleep(5)
-                                        break
-                                except Exception:
-                                    pass
-                            if not logged_in and not self.stop_requested:
-                                raise Exception("Login timeout: Please complete your Zoho login in the browser window and click Start Automation again.")
-
-                        # Wait for mailbox to stabilize if already on mail.zoho.com
-                        for _ in range(10):
-                            if is_mailbox_ready(browser_page):
-                                break
-                            time.sleep(1)
-
-                        # Check if "Access Email" button or "Mail" tile exists on screen (Zoho home portal)
-                        for access_btn_sel in [
-                            "a:has-text('Access Email')",
-                            "button:has-text('Access Email')",
-                            "a:has-text('Access Mail')",
-                            "[title*='Access Email']",
-                            "a[href*='mail.zoho']"
-                        ]:
-                            try:
-                                btn = browser_page.query_selector(access_btn_sel)
-                                if btn and btn.is_visible():
-                                    self.log("Found 'Access Email' button on page. Clicking to navigate into Mail...")
-                                    btn.click()
-                                    time.sleep(4)
-                                    break
-                            except Exception:
-                                pass
-
-                        # If still not inside mailbox and not on accounts.zoho, only navigate if URL is not already mail.zoho.com/zm/
-                        if not is_mailbox_ready(browser_page) and ("accounts.zoho" not in browser_page.url.lower()):
-                            curr_u = browser_page.url.lower()
-                            if "/zm" not in curr_u:
-                                self.log("Navigating to Zoho Mail Inbox: https://mail.zoho.com/zm/ ...")
-                                try:
-                                    browser_page.goto("https://mail.zoho.com/zm/", timeout=60000, wait_until="domcontentloaded")
-                                except Exception as e_nav:
-                                    self.log(f"Navigation notice: {e_nav}")
-                                time.sleep(4)
-                            else:
-                                self.log("Waiting for Zoho Mail SPA hydration...")
-                                try:
-                                    browser_page.wait_for_selector("button[title*='New Mail' i], .zmNavMail, #zm_mail, [data-app='mail']", timeout=15000)
-                                except Exception:
-                                    pass
-
-                        # Make sure Mail icon is selected in the left navigation sidebar (not Calendar/Events)
-                        try:
-                            mail_app_icon = browser_page.query_selector(".zmNavMail, [data-app='mail'], [title='Mail']")
-                            if mail_app_icon and mail_app_icon.is_visible():
-                                mail_app_icon.click()
-                                time.sleep(1.5)
-                        except Exception:
-                            pass
-
-                        self.ui_dispatch(lambda: self.session_indicator.config(text="● In Mailbox & Automating", fg=self.accent_red))
-
-                        # 2. Run batch dispatch across single or multiple background tabs
-                        self._execute_batch(browser_context, browser_page, data)
+                        # Run parallel dispatch on shared queue
+                        self._run_account_dispatch(browser_context, browser_page, task_queue, params, df, acc_id)
 
                     except Exception as batch_err:
-                        self.log(f"Automation execution error: {batch_err}")
-                        self.ui_dispatch(lambda e=str(batch_err): messagebox.showerror("Automation Error", e))
+                        self.log(f"[Account {acc_id}] Batch execution notice: {batch_err}")
                     finally:
-                        self.is_running = False
-                        self.ui_dispatch(lambda: self.timer_display.config(text="⏱ Queue: Idle", fg=self.fg_muted))
-                        self.ui_dispatch(lambda: self._toggle_ui(running=False))
+                        self.ui_dispatch(lambda a=acc_id: self.acc_indicators[a].config(text=f"● Acct {a}: Idle", fg=self.fg_muted, bg="#f3f4f6"))
+                        self._check_batch_completion()
 
         except Exception as fatal:
-            self.log(f"Fatal worker error: {fatal}")
+            self.log(f"[Account {acc_id}] Fatal worker error: {fatal}")
         finally:
             if browser_context:
                 try:
@@ -1611,322 +1796,261 @@ class ModernDarkZohoAutomationApp:
                 except Exception:
                     pass
 
-    def _execute_batch(self, context, primary_page, params):
+    def _ensure_inbox_ready(self, page, provider_name: str, target_url: str, acc_id: int):
+        curr_url = page.url.lower() if page.url else ""
+        if not curr_url or curr_url.startswith("about:"):
+            self.log(f"[Account {acc_id}] Navigating to {provider_name}: {target_url} ...")
+            try:
+                page.goto(target_url, timeout=60000, wait_until="domcontentloaded")
+            except Exception as e_nav:
+                self.log(f"[Account {acc_id}] Navigation notice: {e_nav}")
+            time.sleep(3)
+            curr_url = page.url.lower()
+
+        # Check login detection
+        login_detected = False
+        if provider_name == "Zoho Mail":
+            if "accounts.zoho" in curr_url or "signin" in curr_url or "login" in curr_url:
+                login_detected = True
+        elif provider_name == "BigRock Titan Email":
+            if "login" in curr_url or "signin" in curr_url or "auth" in curr_url:
+                login_detected = True
+            else:
+                try:
+                    login_detected = bool(page.query_selector("input[type='password']"))
+                except Exception:
+                    pass
+        elif provider_name == "BigRock Webmail":
+            try:
+                login_detected = bool(page.query_selector("form#login-form, input[name='user'], input[name='pass'], #rcmloginuser"))
+            except Exception:
+                pass
+
+        if login_detected:
+            self.log(f"[Account {acc_id}] ⚠️ Login/Verification detected for {provider_name}. Waiting for you to complete sign-in in the browser...")
+            self.ui_dispatch(lambda a=acc_id: self.acc_indicators[a].config(text=f"● Acct {a}: Waiting for Login...", fg="#b45309", bg="#fef3c7"))
+            logged_in = False
+            for _ in range(90):
+                if self.stop_requested:
+                    break
+                time.sleep(2)
+                try:
+                    u = page.url.lower()
+                    if provider_name == "Zoho Mail" and "mail.zoho" in u and "accounts.zoho" not in u:
+                        logged_in = True
+                        break
+                    elif provider_name == "BigRock Titan Email" and "app.titan.email" in u and "login" not in u:
+                        logged_in = True
+                        break
+                    elif provider_name == "BigRock Webmail" and not page.query_selector("form#login-form, input[name='user']"):
+                        logged_in = True
+                        break
+                except Exception:
+                    pass
+            if not logged_in and not self.stop_requested:
+                raise Exception(f"Account {acc_id} login timeout: Please complete your {provider_name} sign-in in the browser window and retry.")
+            self.log(f"[Account {acc_id}] Login verified! Waiting for mailbox to load...")
+            time.sleep(4)
+
+        if provider_name == "Zoho Mail":
+            for access_btn_sel in ["a:has-text('Access Email')", "button:has-text('Access Email')", "a:has-text('Access Mail')", "[title*='Access Email']", "a[href*='mail.zoho']"]:
+                try:
+                    btn = page.query_selector(access_btn_sel)
+                    if btn and btn.is_visible():
+                        btn.click()
+                        time.sleep(4)
+                        break
+                except Exception:
+                    pass
+            try:
+                mail_app_icon = page.query_selector(".zmNavMail, [data-app='mail'], [title='Mail']")
+                if mail_app_icon and mail_app_icon.is_visible():
+                    mail_app_icon.click()
+                    time.sleep(1.5)
+            except Exception:
+                pass
+
+    def _run_account_dispatch(self, context, page, task_queue, params, df, acc_id: int):
         excel_path = params["excel_path"]
-        subj_tmpl = params.get("subj_tmpl", DEFAULT_SUBJECT)
         subj_pool = params.get("subj_pool", [])
-        body_tmpls = params.get("body_tmpls", [params.get("body_tmpl", "")])
+        body_tmpls = params.get("body_tmpls", [])
         base_mins = params["base_mins"]
         use_jitter = params["use_jitter"]
-        parallel_tabs = params.get("parallel_tabs", 1)
-
         include_optout = params.get("include_optout", True)
         deduplicate_emails = params.get("deduplicate_emails", True)
-        seen_emails_in_session = set()
-
         chunk_rest_hours = params.get("chunk_rest_hours", 1.5)
         max_session_cap = params.get("max_session_cap", 150)
-        CHUNK_REST_SEC = int(chunk_rest_hours * 3600)  # Configurable cooldown (1.0 to 3.0 hrs)
-        BATCH_CAP = 40
-        total_session_sent = 0
+        provider_name = params.get("provider_name", "Zoho Mail")
 
-        # Loop through batches of 40 until all rows in the Excel spreadsheet are completed
-        batch_number = 1
+        col_map = {str(c).strip().lower(): c for c in df.columns}
+        name_col = next((col_map[k] for k in [
+            "author name", "author_name", "author", "name", "recipient name", 
+            "recipient", "full name", "fullname", "contact name", "client name", "person"
+        ] if k in col_map), "name")
+        
+        email_col = next((col_map[k] for k in [
+            "email", "email address", "e-mail", "mail", "email_id", "email id",
+            "recipient email", "e_mail", "mail address", "contact email"
+        ] if k in col_map), "email")
+        
+        title_col = next((col_map[k] for k in [
+            "title", "paper title", "paper_title", "article title", "article_title",
+            "paper", "article", "manuscript title", "manuscript_title", "manuscript",
+            "research title", "research_title", "publication title", "publication_title",
+            "designation", "role", "job title", "job_title", "position",
+            "occupation", "salutation", "profession"
+        ] if k in col_map), "title")
+
+        journal_col = next((col_map[k] for k in [
+            "journal name", "journal_name", "journal", "publication", "source journal",
+            "journal title", "journal_title", "magazine"
+        ] if k in col_map), None)
+
+        import re
+        EMAIL_REGEX = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w+$")
+
+        acc_sent_count = 0
+
         while not self.stop_requested:
-            # 1. Read fresh data from Excel to identify remaining pending rows
-            try:
-                df = pd.read_excel(excel_path)
-            except Exception as read_err:
-                self.log(f"Spreadsheet read error: {read_err}")
-                break
-
-            col_map = {str(c).strip().lower(): c for c in df.columns}
-            name_col = next((col_map[k] for k in [
-                "author name", "author_name", "author", "name", "recipient name", 
-                "recipient", "full name", "fullname", "contact name", "client name", "person"
-            ] if k in col_map), "name")
-            
-            email_col = next((col_map[k] for k in [
-                "email", "email address", "e-mail", "mail", "email_id", "email id",
-                "recipient email", "e_mail", "mail address", "contact email"
-            ] if k in col_map), "email")
-            
-            title_col = next((col_map[k] for k in [
-                "title", "paper title", "paper_title", "article title", "article_title",
-                "paper", "article", "manuscript title", "manuscript_title", "manuscript",
-                "research title", "research_title", "publication title", "publication_title",
-                "designation", "role", "job title", "job_title", "position",
-                "occupation", "salutation", "profession"
-            ] if k in col_map), "title")
-
-            journal_col = next((col_map[k] for k in [
-                "journal name", "journal_name", "journal", "publication", "source journal",
-                "journal title", "journal_title", "magazine"
-            ] if k in col_map), None)
-
-            if title_col not in df.columns:
-                df[title_col] = "Professional"
-
-            total_records = len(df)
-            has_status_col = any(c.strip().lower() == "status" for c in df.columns)
-            if has_status_col:
-                status_col_name = next(c for c in df.columns if c.strip().lower() == "status")
-                status_series = df[status_col_name].astype(str).str.strip().str.upper()
-                pending_indices = [i for i, val in enumerate(status_series) if val != "SENT"]
-                prev_sent_count = (status_series == "SENT").sum()
-            else:
-                pending_indices = list(range(total_records))
-                prev_sent_count = 0
-
-            if not pending_indices:
-                if batch_number == 1:
-                    self.log("All rows in this spreadsheet are already marked as SENT.")
-                    self.ui_dispatch(lambda: messagebox.showinfo("Completed", "All recipients in this spreadsheet are already sent!"))
-                else:
-                    self.log(f"All {total_records} rows in this spreadsheet are now completely finished!")
-                    self.ui_dispatch(lambda s=total_session_sent: messagebox.showinfo("Outreach Complete", f"All data in spreadsheet completed!\nTotal dispatched in this session: {s}"))
-                return
-
-            target_indices = pending_indices[:BATCH_CAP]
-            total_in_batch = len(target_indices)
-
-            self.log(f"=== Starting Chunk {batch_number}: {total_in_batch} recipients (Remaining pending: {len(pending_indices)}) ===")
-            if subj_pool:
-                self.log(f"Using pool of {len(subj_pool)} uploaded subject lines with random selection per mail.")
-
-            sent_in_batch = 0
-            errors_in_session = 0
-
-            # Create/manage pool of tabs inside this authenticated session
-            tab_pool = [primary_page]
-            if parallel_tabs > 1:
-                self.log(f"Spinning up {parallel_tabs - 1} extra background tab(s) for parallel processing...")
-                for t_idx in range(parallel_tabs - 1):
-                    try:
-                        new_tab = context.new_page()
-                        new_tab.goto("https://mail.zoho.com/zm/")
-                        time.sleep(2)
-                        tab_pool.append(new_tab)
-                    except Exception as t_err:
-                        self.log(f"Tab creation notice: {t_err}")
-
-            # Chunk the recipients into parallel slices according to active tab count
-            chunk_size = max(1, len(tab_pool))
-            for chunk_start in range(0, total_in_batch, chunk_size):
-                if self.stop_requested:
-                    self.log("Automation interrupted by user.")
+            # Check session cap
+            with self._stats_lock:
+                if self.total_session_sent >= max_session_cap:
+                    self.log(f"[Account {acc_id}] Session cap of {max_session_cap} reached.")
                     break
 
-                current_chunk = target_indices[chunk_start:chunk_start + chunk_size]
-
-                for tab_idx, r_idx in enumerate(current_chunk):
-                    if self.stop_requested:
-                        break
-
-                    active_page = tab_pool[tab_idx % len(tab_pool)]
-                    row = df.loc[r_idx]
-                    r_name = str(row[name_col]).strip() if pd.notna(row[name_col]) else "Valued Professional"
-                    r_email = str(row[email_col]).strip() if pd.notna(row[email_col]) else ""
-                    r_title = str(row[title_col]).strip() if pd.notna(row[title_col]) else "Professional"
-                    r_journal = str(row[journal_col]).strip() if (journal_col and pd.notna(row[journal_col])) else ""
-
-                    import re
-                    EMAIL_REGEX = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w+$")
-                    if not r_email or not EMAIL_REGEX.match(r_email):
-                        self.log(f"Row {r_idx + 1}: SKIPPED (Invalid email address '{r_email}')")
-                        errors_in_session += 1
-                        mark_excel_row_status(excel_path, r_idx, "INVALID_EMAIL")
-                        continue
-
-                    # Deduplication guard: Never email the same address twice in a single session
-                    clean_email_lower = r_email.strip().lower()
-                    if deduplicate_emails and clean_email_lower in seen_emails_in_session:
-                        self.log(f"Row {r_idx + 1}: SKIPPED (Duplicate address '{r_email}' already reached in this run)")
-                        mark_excel_row_status(excel_path, r_idx, "SKIPPED_DUPLICATE")
-                        continue
-                    seen_emails_in_session.add(clean_email_lower)
-
-                    chosen_body_tmpl = random.choice(body_tmpls)
-
-                    # Determine subject line: randomly picked from the uploaded .txt pool (never uses title)
-                    if subj_pool:
-                        personalized_subject = random.choice(subj_pool)
-                    else:
-                        personalized_subject = "Important Invitation & Inquiry"
-
-                    # Generate formatted Times New Roman HTML with bolded {name}, {title}, and {journal}, plus clean plain text fallback
-                    rich_body_html, plain_body_text = build_formatted_email_content(
-                        raw_template=chosen_body_tmpl,
-                        r_name=r_name,
-                        r_title=r_title,
-                        r_email=r_email,
-                        r_journal=r_journal,
-                        include_optout=include_optout
-                    )
-
-                    tab_label = f"Tab {tab_idx + 1}" if len(tab_pool) > 1 else "Primary"
-                    self.log(f"[{tab_label}] Dispatching ({chunk_start + tab_idx + 1}/{total_in_batch}) to {r_name} <{r_email}> | Subj: {personalized_subject[:36]}...")
-
-                    try:
-                        self._send_in_browser(active_page, r_email, personalized_subject, rich_body_html, plain_body_text)
-                        sent_in_batch += 1
-                        total_session_sent += 1
-                        mark_excel_row_status(excel_path, r_idx, "SENT")
-                        self.log(f"SUCCESS [{tab_label}]: Email dispatched to {r_email} (Row {r_idx + 1} marked SENT).")
-                    except Exception as err:
-                        errors_in_session += 1
-                        self.log(f"SKIPPED ROW {r_idx + 1} ({r_email}) due to error: {err}")
-                        mark_excel_row_status(excel_path, r_idx, f"ERROR: {str(err)[:30]}")
-                        try:
-                            active_page.keyboard.press("Escape")
-                            time.sleep(1)
-                        except Exception:
-                            pass
-
-                    # Update live stats and status graph purely in UI memory
-                    curr_sent = prev_sent_count + sent_in_batch
-                    curr_errors = errors_in_session
-                    curr_pending = max(0, total_records - curr_sent - curr_errors)
-                    curr_pct = int((curr_sent / total_records * 100)) if total_records > 0 else 0
-
-                    self.ui_dispatch(lambda s=curr_sent, t=total_records, p=curr_pending, e=curr_errors, pct=curr_pct: (
-                        self.stats_lbl.config(text=f"Total: {t} | Sent: {s} | Pending: {p}"),
-                        self.progress_bar.config(value=pct),
-                        self.progress_pct_lbl.config(text=f"{pct}%"),
-                        self._draw_status_graph(sent=s, pending=p, errors=e)
-                    ))
-
-                # Anti-bot human delay between dispatch waves inside the 40-chunk
-                if chunk_start + chunk_size < total_in_batch and not self.stop_requested:
-                    base_sec = base_mins * 60.0
-                    jitter_sec = random.randint(-25, 35) if use_jitter else 0
-                    sleep_sec = max(20.0, base_sec + jitter_sec)
-
-                    self.log(f"Pacing: Resting for {sleep_sec:.0f} seconds before next dispatch wave...")
-
-                    remaining = int(sleep_sec)
-                    while remaining > 0 and not self.stop_requested:
-                        m, s = divmod(remaining, 60)
-                        self.ui_dispatch(lambda mm=m, ss=s: self.timer_display.config(
-                            text=f"⏱ Next dispatch: {mm:02d}:{ss:02d}", fg=self.accent_red
-                        ))
-                        time.sleep(1)
-                        remaining -= 1
-
-            # Clean up any auxiliary tabs created for this chunk
-            if len(tab_pool) > 1:
-                for extra_tab in tab_pool[1:]:
-                    try:
-                        extra_tab.close()
-                    except Exception:
-                        pass
-                tab_pool = [primary_page]
-
-            self.log(f"Chunk {batch_number} completed! Dispatched: {sent_in_batch} emails.")
-
-            if self.stop_requested:
+            try:
+                r_idx = task_queue.get_nowait()
+            except queue.Empty:
+                self.log(f"[Account {acc_id}] All pending recipients in task queue completed!")
                 break
 
-            # 2. Check if maximum session cap (e.g. 150 emails) has been reached
-            if total_session_sent >= max_session_cap:
-                self.log(f"🎯 Target session cap of {max_session_cap} emails reached! Halting to protect inbox sender reputation.")
-                self.ui_dispatch(lambda s=total_session_sent, c=max_session_cap: messagebox.showinfo(
-                    "Target Cap Reached",
-                    f"✓ Reached safety cap of {s} / {c} emails for this session!\n\nSpreadsheet has been synchronized. Next batch can be safely run tomorrow."
-                ))
-                return
+            row = df.loc[r_idx]
+            r_name = str(row[name_col]).strip() if pd.notna(row[name_col]) else "Valued Professional"
+            r_email = str(row[email_col]).strip() if pd.notna(row[email_col]) else ""
+            r_title = str(row[title_col]).strip() if pd.notna(row[title_col]) else "Professional"
+            r_journal = str(row[journal_col]).strip() if (journal_col and pd.notna(row[journal_col])) else ""
 
-            # 3. Check if more rows remain to be sent
+            if not r_email or not EMAIL_REGEX.match(r_email):
+                self.log(f"[Account {acc_id}] Row {r_idx + 1}: SKIPPED (Invalid email '{r_email}')")
+                mark_excel_row_status(excel_path, r_idx, "INVALID_EMAIL")
+                continue
+
+            clean_email_lower = r_email.strip().lower()
+            if deduplicate_emails:
+                with self.seen_emails_lock:
+                    if clean_email_lower in self.seen_emails_in_session:
+                        self.log(f"[Account {acc_id}] Row {r_idx + 1}: SKIPPED (Duplicate '{r_email}' already reached)")
+                        mark_excel_row_status(excel_path, r_idx, "SKIPPED_DUPLICATE")
+                        continue
+                    self.seen_emails_in_session.add(clean_email_lower)
+
+            chosen_body_tmpl = random.choice(body_tmpls)
+            chosen_subj_tmpl = random.choice(subj_pool) if subj_pool else DEFAULT_SUBJECT
+
+            # Build HTML with Times New Roman and bold markers
+            body_html, body_text = format_email_body_html(
+                chosen_body_tmpl,
+                name=r_name,
+                title=r_title,
+                journal_name=r_journal,
+                include_optout=include_optout
+            )
+
+            subject = chosen_subj_tmpl.replace("{name}", r_name).replace("{title}", r_title).replace("{journal}", r_journal).strip()
+
+            self.log(f"[Account {acc_id}] Sending to Row {r_idx + 1}: {r_name} <{r_email}> | Subj: {subject[:40]}...")
+
+            send_success = False
             try:
-                df_check = pd.read_excel(excel_path)
-                has_sc = any(c.strip().lower() == "status" for c in df_check.columns)
-                if has_sc:
-                    sc_name = next(c for c in df_check.columns if c.strip().lower() == "status")
-                    remaining_unprocessed = (df_check[sc_name].astype(str).str.strip().str.upper() != "SENT").sum()
-                else:
-                    remaining_unprocessed = 0
-            except Exception:
-                remaining_unprocessed = 0
+                self._send_in_browser(page, r_email, subject, body_html, body_text, provider_name=provider_name)
+                send_success = True
+            except Exception as send_err:
+                self.log(f"[Account {acc_id}] Dispatch failed for {r_email}: {send_err}")
+                mark_excel_row_status(excel_path, r_idx, f"FAILED: {str(send_err)[:25]}")
 
-            if remaining_unprocessed == 0:
-                self.log(f"All data completed! Total session emails sent: {total_session_sent}")
-                self.ui_dispatch(lambda s=total_session_sent: messagebox.showinfo("Completed", f"All spreadsheet records have been successfully sent!\nTotal sent: {s}"))
-                return
+            if send_success:
+                mark_excel_row_status(excel_path, r_idx, "SENT")
+                acc_sent_count += 1
+                with self._stats_lock:
+                    self.total_session_sent += 1
+                    cur_total_sent = self.total_session_sent
+                
+                self.log(f"[Account {acc_id}] ✓ Successfully SENT to {r_name} <{r_email}> (Account total: {acc_sent_count} | Session total: {cur_total_sent})")
 
-            # 4. Mandatory cooldown: Configurable rest interval (default: 1.5 - 2 hrs) between each 40-mail chunk
-            self.log(f"Chunk cap reached (40 emails dispatched). Enforcing {chunk_rest_hours:.1f}-hour cooldown interval ({remaining_unprocessed} rows remaining)...")
-            wait_remaining = CHUNK_REST_SEC
-            while wait_remaining > 0 and not self.stop_requested:
-                hrs, rem = divmod(wait_remaining, 3600)
-                mins, secs = divmod(rem, 60)
-                time_str = f"{hrs:02d}:{mins:02d}:{secs:02d}"
-                self.ui_dispatch(lambda ts=time_str, crh=chunk_rest_hours: self.timer_display.config(
-                    text=f"⏳ {crh:.1f}-Hr Interval: Next 40 in {ts}", fg="#000000"
+                # UI updates
+                self.ui_dispatch(lambda cts=cur_total_sent, tr=self.total_rows_count, sr=self.sent_rows_count, na=self.active_workers_count: (
+                    self.progress_bar.config(value=sr + cts),
+                    self.stats_lbl.config(text=f"Total: {tr}  |  Sent: {sr + cts}  |  Pending: {max(0, tr - (sr + cts))}  |  Parallel Accounts: {na} Active")
                 ))
-                time.sleep(1)
-                wait_remaining -= 1
 
-            if not self.stop_requested:
-                self.log(f"{chunk_rest_hours:.1f}-hour cooldown completed. Resuming next chunk of 40 emails...")
+                # Humanized pacing delay
+                delay_sec = base_mins * 60
+                if use_jitter:
+                    jitter = random.randint(15, 35) * random.choice([-1, 1])
+                    delay_sec = max(30, delay_sec + jitter)
 
-            batch_number += 1
+                self.log(f"[Account {acc_id}] Humanized delay: waiting {delay_sec:.1f}s before next outreach...")
+                for s in range(int(delay_sec)):
+                    if self.stop_requested:
+                        break
+                    time.sleep(1)
 
-        self.log(f"Automation finished or halted! Session total sent: {total_session_sent}")
-        self.ui_dispatch(lambda s=total_session_sent: messagebox.showinfo("Done", f"Automation finished!\nTotal sent in session: {s}"))
+                # 40-mail wave cooldown check per account
+                if acc_sent_count > 0 and (acc_sent_count % 40 == 0):
+                    self.log(f"[Account {acc_id}] Reached 40 dispatched emails. Entering {chunk_rest_hours:.1f}-hour cooldown wave...")
+                    rest_sec = int(chunk_rest_hours * 3600)
+                    for r_tick in range(rest_sec):
+                        if self.stop_requested:
+                            break
+                        time.sleep(1)
 
-    def _send_in_browser(self, page, to_email, subject, body_html, body_text=None):
+    def _check_batch_completion(self):
+        with self._stats_lock:
+            self.active_workers_count = max(0, self.active_workers_count - 1)
+            remaining = self.active_workers_count
+
+        if remaining == 0:
+            self.is_running = False
+            self.ui_dispatch(lambda: self.timer_display.config(text="⏱ Queue: Idle / Completed", fg=self.fg_muted))
+            self.ui_dispatch(lambda: self._toggle_ui(running=False))
+            self.ui_dispatch(lambda s=self.total_session_sent: messagebox.showinfo(
+                "Outreach Complete",
+                f"All batches and accounts completed!\n\nTotal emails dispatched across parallel accounts: {s}"
+            ))
+
+    def _send_in_browser(self, page, to_email, subject, body_html, body_text=None, provider_name="Zoho Mail"):
         if body_text is None:
             body_text = clean_to_plain_text(body_html)
-        self.log(f"Opening compose tab for: {to_email}")
+        prov_info = WEBMAIL_PROVIDERS.get(provider_name, WEBMAIL_PROVIDERS["Zoho Mail"])
+        self.log(f"[{provider_name}] Opening compose editor for: {to_email}")
 
-        # 1. Click Compose / New Mail button (Strictly Mail, avoid Calendar / Reminders / Tasks!)
+        # 1. Click Compose button
         clicked = False
-        compose_selectors = [
-            "button[title='New Mail']",
-            "button[title*='New Mail']",
-            "button.zmBtn_primary[title*='New Mail']",
-            "button:has-text('New Mail')",
-            "[data-test-id='compose-mail']",
-            "button[aria-label='New Mail']",
-            "button:has-text('Compose Mail')",
-            "button:has-text('Compose')"
-        ]
+        compose_selectors = prov_info.get("compose_selectors", [])
         for sel in compose_selectors:
             try:
                 btn = page.query_selector(sel)
                 if btn and btn.is_visible():
                     btn.click()
                     clicked = True
-                    self.log(f"Clicked compose button via: {sel}")
                     break
             except Exception:
                 pass
 
         if not clicked:
-            # Dismiss any popups or reminder cards on screen first by pressing Escape
             page.keyboard.press("Escape")
             time.sleep(0.5)
-            self.log("Using shortcut 'm' (or 'c') to open Mail composer...")
-            page.keyboard.press("m")
+            shortcut = prov_info.get("compose_shortcut", "c")
+            page.keyboard.press(shortcut)
             time.sleep(1)
-            # Check if compose window appeared; if not try 'c'
-            if not page.query_selector("input[placeholder*='Subject' i], #mailSubject"):
+            if not page.query_selector("input[placeholder*='Subject' i], #mailSubject, #compose-subject, input[data-testid*='subject']"):
                 page.keyboard.press("c")
 
         time.sleep(2)
 
         # 2. Locate and fill 'To' recipient field
-        self.log(f"Entering recipient email: {to_email}")
         filled_to = False
-        to_selectors = [
-            "input[placeholder*='Add contact']",
-            "input[placeholder*='to' i]",
-            "div[data-name='to'] input",
-            "#mailTo input",
-            ".select2-search__field",
-            "input[aria-label*='To' i]",
-            "div[contenteditable='true'][aria-label*='To' i]"
-        ]
+        to_selectors = prov_info.get("to_selectors", [])
         for sel in to_selectors:
             try:
                 el = page.query_selector(sel)
@@ -1941,12 +2065,11 @@ class ModernDarkZohoAutomationApp:
                 pass
 
         if not filled_to:
-            # Try finding any visible input in the top header of composer
             try:
                 inputs = page.query_selector_all("input")
                 for inp in inputs:
-                    ph = inp.get_attribute("placeholder") or ""
-                    if any(k in ph.lower() for k in ["contact", "recipient", "to", "email"]) and inp.is_visible():
+                    ph = (inp.get_attribute("placeholder") or "").lower()
+                    if any(k in ph for k in ["contact", "recipient", "to", "email"]) and inp.is_visible():
                         inp.click()
                         inp.fill(to_email)
                         time.sleep(0.3)
@@ -1959,14 +2082,8 @@ class ModernDarkZohoAutomationApp:
         time.sleep(0.8)
 
         # 3. Locate and fill Subject
-        self.log(f"Entering subject: {subject}")
         filled_subj = False
-        subj_selectors = [
-            "input[placeholder*='Subject' i]",
-            "input[aria-label*='Subject' i]",
-            "input[name='subject']",
-            "#mailSubject"
-        ]
+        subj_selectors = prov_info.get("subject_selectors", [])
         for sel in subj_selectors:
             try:
                 el = page.query_selector(sel)
@@ -1979,12 +2096,11 @@ class ModernDarkZohoAutomationApp:
                 pass
 
         if not filled_subj:
-            # Fallback by tab or attribute scan
             try:
                 inputs = page.query_selector_all("input")
                 for inp in inputs:
-                    ph = inp.get_attribute("placeholder") or ""
-                    if "subject" in ph.lower() and inp.is_visible():
+                    ph = (inp.get_attribute("placeholder") or "").lower()
+                    if "subject" in ph and inp.is_visible():
                         inp.click()
                         inp.fill(subject)
                         filled_subj = True
@@ -1994,14 +2110,13 @@ class ModernDarkZohoAutomationApp:
 
         time.sleep(0.8)
 
-        # 4. Locate and fill Message Body strictly formatted in Times New Roman with bolded {name} and {title}
-        self.log(f"Inserting formatted email body in Times New Roman with bold name & title...")
+        # 4. Locate and fill formatted Message Body strictly in Times New Roman with bold placeholders
         filled_body = False
 
-        # Try rich injection inside iframe first
+        # A. Try rich injection inside iframe first (Zoho editor or Roundcube TinyMCE)
         for frame in page.frames:
             try:
-                body_elem = frame.query_selector("body[contenteditable='true'], body")
+                body_elem = frame.query_selector("body[contenteditable='true'], body#tinymce, body")
                 if body_elem and body_elem.is_visible():
                     body_elem.click()
                     time.sleep(0.2)
@@ -2018,7 +2133,6 @@ class ModernDarkZohoAutomationApp:
                                     document.body.innerHTML = html;
                                 }
 
-                                // Native document font and formatting enforcement
                                 document.execCommand('selectAll', false, null);
                                 document.execCommand('fontName', false, 'Times New Roman');
                                 document.execCommand('fontSize', false, '3');
@@ -2051,22 +2165,13 @@ class ModernDarkZohoAutomationApp:
                     )
                     if inserted:
                         filled_body = True
-                        self.log("Formatted Times New Roman table successfully rendered into editor iframe!")
                         break
             except Exception:
                 pass
 
+        # B. Try contenteditable divs (Zoho, Titan, or Roundcube div)
         if not filled_body:
-            body_selectors = [
-                "div[contenteditable='true'][aria-label*='Message body' i]",
-                "div[contenteditable='true'][aria-label*='body' i]",
-                "div[contenteditable='true'][aria-label*='Mail' i]",
-                "div[contenteditable='true']",
-                "#mailContent",
-                ".zmMailContent",
-                "[data-test-id='mail-compose-body']",
-                ".zmComposeBody"
-            ]
+            body_selectors = prov_info.get("body_selectors", [])
             for sel in body_selectors:
                 try:
                     el = page.query_selector(sel)
@@ -2088,7 +2193,6 @@ class ModernDarkZohoAutomationApp:
                                         e.innerHTML = html;
                                     }
 
-                                    // Native document font and formatting enforcement
                                     document.execCommand('selectAll', false, null);
                                     document.execCommand('fontName', false, 'Times New Roman');
                                     document.execCommand('fontSize', false, '3');
@@ -2121,14 +2225,25 @@ class ModernDarkZohoAutomationApp:
                         )
                         if inserted:
                             filled_body = True
-                            self.log("Formatted Times New Roman table successfully rendered into compose editor!")
                             break
                 except Exception:
                     pass
 
+        # C. Try textarea element (e.g., Roundcube plain text composer)
         if not filled_body:
-            # Fallback: Focus editor and use clipboard paste with HTML format
-            self.log("Using clipboard paste fallback for formatted email...")
+            for ta_sel in ["#composebody", "textarea[name='_message']", "textarea"]:
+                try:
+                    ta = page.query_selector(ta_sel)
+                    if ta and ta.is_visible():
+                        ta.click()
+                        ta.fill(body_text)
+                        filled_body = True
+                        break
+                except Exception:
+                    pass
+
+        # D. Clipboard fallback
+        if not filled_body:
             try:
                 page.keyboard.press("Tab")
                 time.sleep(0.3)
@@ -2147,17 +2262,6 @@ class ModernDarkZohoAutomationApp:
                 time.sleep(0.3)
                 page.keyboard.press("Control+v")
                 time.sleep(0.5)
-
-                page.evaluate(
-                    """() => {
-                        document.execCommand('selectAll', false, null);
-                        document.execCommand('fontName', false, 'Times New Roman');
-                        document.execCommand('fontSize', false, '3');
-                        document.execCommand('justifyLeft', false, null);
-                        const sel = window.getSelection();
-                        if (sel) sel.removeAllRanges();
-                    }"""
-                )
                 filled_body = True
             except Exception:
                 pass
@@ -2165,15 +2269,8 @@ class ModernDarkZohoAutomationApp:
         time.sleep(1.0)
 
         # 5. Click Send
-        self.log("Clicking Send button...")
         clicked_send = False
-        send_selectors = [
-            "button[title*='Send' i]",
-            "button:has-text('Send')",
-            "span:text-is('Send')",
-            "[data-test-id='send-button']",
-            ".zmBtn.zmBtn_primary:has-text('Send')"
-        ]
+        send_selectors = prov_info.get("send_selectors", [])
         for sel in send_selectors:
             try:
                 btn = page.query_selector(sel)
@@ -2185,7 +2282,6 @@ class ModernDarkZohoAutomationApp:
                 pass
 
         if not clicked_send:
-            self.log("Triggering shortcut 'Control+Enter' to dispatch...")
             page.keyboard.press("Control+Enter")
 
         time.sleep(3.5)
@@ -2196,7 +2292,13 @@ class ModernDarkZohoAutomationApp:
                 close_cached_excel_workbook(self.excel_file_path)
         except Exception:
             pass
-        self.cmd_queue.put(("QUIT", None))
+        for aid in [1, 2, 3]:
+            try:
+                q = self.account_queues.get(aid)
+                if q:
+                    q.put(("QUIT", None))
+            except Exception:
+                pass
         self.root.destroy()
 
 if __name__ == "__main__":

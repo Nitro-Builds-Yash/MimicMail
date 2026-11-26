@@ -33,3 +33,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+.mimicmail_license.dat
+mimicmail_browser_profiles/
