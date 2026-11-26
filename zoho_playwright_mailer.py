@@ -20,6 +20,12 @@ STEALTH_INIT_SCRIPT = """
             get: () => undefined,
             configurable: true
         });
+        if (!window.chrome) {
+            window.chrome = {};
+        }
+        if (!window.chrome.runtime) {
+            window.chrome.runtime = {};
+        }
     } catch(e) {}
 })();
 """
@@ -457,6 +463,8 @@ WEBMAIL_PROVIDERS = {
         "domain_keywords": ["titan.email", "bigrock.titan"],
         "compose_selectors": [
             "button:has-text('Compose')",
+            "[role='button']:has-text('Compose')",
+            "a:has-text('Compose')",
             "button[data-testid*='compose' i]",
             "button[aria-label*='Compose' i]",
             "[data-qa='compose-btn']",
@@ -465,16 +473,17 @@ WEBMAIL_PROVIDERS = {
         ],
         "compose_shortcut": "c",
         "to_selectors": [
-            "input[placeholder*='To' i]",
             "input[data-testid*='recipient-input']",
+            "input[placeholder*='To' i]",
             "input[data-testid*='to' i]",
             "div[data-testid*='to' i] input",
             "input[aria-label*='To' i]",
-            "input[name='to']"
+            "input[name='to']",
+            "input[role='combobox']"
         ],
         "subject_selectors": [
-            "input[placeholder*='Subject' i]",
             "input[data-testid*='subject-input']",
+            "input[placeholder*='Subject' i]",
             "input[name='subject']",
             "input[aria-label*='Subject' i]"
         ],
@@ -497,9 +506,9 @@ WEBMAIL_PROVIDERS = {
         "default_url": "https://webmail.bigrock.in",
         "domain_keywords": ["webmail", "roundcube"],
         "compose_selectors": [
+            "#rcmbtn101",
             "a.button-compose",
             "a:has-text('Compose')",
-            "#rcmbtn101",
             "[data-action='compose']",
             "a[title*='Compose' i]",
             "button:has-text('Compose')",
@@ -563,15 +572,23 @@ def clean_profile_locks(profile_dir: str):
             except Exception:
                 pass
 
+_CHROMIUM_CHECK_DONE = False
+_CHROMIUM_LOCK = threading.Lock()
+
 def _ensure_chromium_installed():
-    """Automatically ensures Playwright Chromium browser binary is present."""
-    try:
-        from playwright._impl._driver import compute_driver_executable
-        import subprocess
-        driver_exec, driver_cli = compute_driver_executable()
-        subprocess.run([driver_exec, driver_cli, "install", "chromium"], capture_output=True, text=True, timeout=120)
-    except Exception:
-        pass
+    """Automatically ensures Playwright Chromium browser binary is present (runs once thread-safely)."""
+    global _CHROMIUM_CHECK_DONE
+    with _CHROMIUM_LOCK:
+        if _CHROMIUM_CHECK_DONE:
+            return
+        _CHROMIUM_CHECK_DONE = True
+        try:
+            from playwright._impl._driver import compute_driver_executable
+            import subprocess
+            driver_exec, driver_cli = compute_driver_executable()
+            subprocess.run([driver_exec, driver_cli, "install", "chromium"], capture_output=True, text=True, timeout=60)
+        except Exception:
+            pass
 
 PROFILE_DIR = get_account_profile_dir(1)
 
@@ -1694,6 +1711,16 @@ class ModernDarkZohoAutomationApp:
                         url = data.get("url", WEBMAIL_PROVIDERS.get(provider_name, {}).get("default_url"))
 
                         clean_profile_locks(profile_dir)
+                        if browser_context:
+                            try:
+                                if not browser_page or browser_page.is_closed():
+                                    browser_context.close()
+                                    browser_context = None
+                                    browser_page = None
+                            except Exception:
+                                browser_context = None
+                                browser_page = None
+
                         if not (browser_context and browser_page and not browser_page.is_closed()):
                             self.log(f"[Account {acc_id}] Launching persistent Chromium browser ({provider_name})...")
                             self.ui_dispatch(lambda a=acc_id: self.acc_indicators[a].config(text=f"● Acct {a}: Launching...", fg="#000000", bg="#fef08a"))
@@ -1703,7 +1730,8 @@ class ModernDarkZohoAutomationApp:
                                 headless=False,
                                 no_viewport=True,
                                 timeout=60000,
-                                permissions=["clipboard-read", "clipboard-write"],
+                                ignore_https_errors=True,
+                                permissions=["clipboard-read", "clipboard-write", "notifications"],
                                 ignore_default_args=["--enable-automation"],
                                 args=[
                                     "--start-maximized",
@@ -1713,7 +1741,9 @@ class ModernDarkZohoAutomationApp:
                                     "--disable-dev-shm-usage",
                                     "--disable-gpu",
                                     "--no-first-run",
-                                    "--no-default-browser-check"
+                                    "--no-default-browser-check",
+                                    "--ignore-certificate-errors",
+                                    "--allow-running-insecure-content"
                                 ]
                             )
                             browser_context.add_init_script(STEALTH_INIT_SCRIPT)
@@ -1744,6 +1774,16 @@ class ModernDarkZohoAutomationApp:
 
                     try:
                         clean_profile_locks(profile_dir)
+                        if browser_context:
+                            try:
+                                if not browser_page or browser_page.is_closed():
+                                    browser_context.close()
+                                    browser_context = None
+                                    browser_page = None
+                            except Exception:
+                                browser_context = None
+                                browser_page = None
+
                         if not (browser_context and browser_page and not browser_page.is_closed()):
                             self.log(f"[Account {acc_id}] Opening browser session for outreach...")
                             browser_context = playwright_instance.chromium.launch_persistent_context(
@@ -1751,7 +1791,8 @@ class ModernDarkZohoAutomationApp:
                                 headless=False,
                                 no_viewport=True,
                                 timeout=60000,
-                                permissions=["clipboard-read", "clipboard-write"],
+                                ignore_https_errors=True,
+                                permissions=["clipboard-read", "clipboard-write", "notifications"],
                                 ignore_default_args=["--enable-automation"],
                                 args=[
                                     "--start-maximized",
@@ -1761,7 +1802,9 @@ class ModernDarkZohoAutomationApp:
                                     "--disable-dev-shm-usage",
                                     "--disable-gpu",
                                     "--no-first-run",
-                                    "--no-default-browser-check"
+                                    "--no-default-browser-check",
+                                    "--ignore-certificate-errors",
+                                    "--allow-running-insecure-content"
                                 ]
                             )
                             browser_context.add_init_script(STEALTH_INIT_SCRIPT)
@@ -1797,6 +1840,30 @@ class ModernDarkZohoAutomationApp:
                     pass
 
     def _ensure_inbox_ready(self, page, provider_name: str, target_url: str, acc_id: int):
+        def is_mailbox_loaded(p):
+            try:
+                if provider_name == "Zoho Mail":
+                    return bool(p.query_selector("button[title*='New Mail' i], .zmNavMail, #zm_mail, [data-app='mail']"))
+                elif provider_name == "BigRock Titan Email":
+                    return bool(p.query_selector("button:has-text('Compose'), [role='button']:has-text('Compose'), a:has-text('Compose'), [data-testid*='compose'], [data-qa='compose-btn']"))
+                elif provider_name == "BigRock Webmail":
+                    return bool(p.query_selector("#rcmbtn101, a.button-compose, [data-action='compose'], a[title*='Compose' i], #messagelist, .mailboxlist"))
+            except Exception:
+                return False
+            return False
+
+        def is_login_page(p, url_str):
+            try:
+                if provider_name == "Zoho Mail":
+                    return any(k in url_str for k in ["accounts.zoho", "signin", "login"]) or bool(p.query_selector("#login_id, input[type='password']"))
+                elif provider_name == "BigRock Titan Email":
+                    return ("login" in url_str or "auth" in url_str) or bool(p.query_selector("input[name='email'], input[type='password'], button:has-text('Login')"))
+                elif provider_name == "BigRock Webmail":
+                    return ("login" in url_str) or bool(p.query_selector("form#login-form, input[name='_user'], input[name='_pass'], #rcmloginuser"))
+            except Exception:
+                return False
+            return False
+
         curr_url = page.url.lower() if page.url else ""
         if not curr_url or curr_url.startswith("about:"):
             self.log(f"[Account {acc_id}] Navigating to {provider_name}: {target_url} ...")
@@ -1807,51 +1874,43 @@ class ModernDarkZohoAutomationApp:
             time.sleep(3)
             curr_url = page.url.lower()
 
-        # Check login detection
-        login_detected = False
-        if provider_name == "Zoho Mail":
-            if "accounts.zoho" in curr_url or "signin" in curr_url or "login" in curr_url:
-                login_detected = True
-        elif provider_name == "BigRock Titan Email":
-            if "login" in curr_url or "signin" in curr_url or "auth" in curr_url:
-                login_detected = True
-            else:
-                try:
-                    login_detected = bool(page.query_selector("input[type='password']"))
-                except Exception:
-                    pass
-        elif provider_name == "BigRock Webmail":
-            try:
-                login_detected = bool(page.query_selector("form#login-form, input[name='user'], input[name='pass'], #rcmloginuser"))
-            except Exception:
-                pass
+        # Check if already inside mailbox
+        if is_mailbox_loaded(page):
+            self.log(f"[Account {acc_id}] ✓ Active session detected in {provider_name} mailbox.")
+            return
 
-        if login_detected:
-            self.log(f"[Account {acc_id}] ⚠️ Login/Verification detected for {provider_name}. Waiting for you to complete sign-in in the browser...")
+        # Check if user needs to log in
+        if is_login_page(page, curr_url):
+            self.log(f"[Account {acc_id}] ⚠️ {provider_name} sign-in screen detected. Please complete your login in the browser window...")
             self.ui_dispatch(lambda a=acc_id: self.acc_indicators[a].config(text=f"● Acct {a}: Waiting for Login...", fg="#b45309", bg="#fef3c7"))
+
             logged_in = False
-            for _ in range(90):
+            for _ in range(150):  # Wait up to 5 minutes for login / 2FA / OTP
                 if self.stop_requested:
                     break
                 time.sleep(2)
-                try:
-                    u = page.url.lower()
-                    if provider_name == "Zoho Mail" and "mail.zoho" in u and "accounts.zoho" not in u:
-                        logged_in = True
-                        break
-                    elif provider_name == "BigRock Titan Email" and "app.titan.email" in u and "login" not in u:
-                        logged_in = True
-                        break
-                    elif provider_name == "BigRock Webmail" and not page.query_selector("form#login-form, input[name='user']"):
-                        logged_in = True
-                        break
-                except Exception:
-                    pass
+                if is_mailbox_loaded(page):
+                    logged_in = True
+                    break
+                u = page.url.lower() if page.url else ""
+                # Check if URL moved out of login domain
+                if provider_name == "Zoho Mail" and "mail.zoho" in u and "accounts.zoho" not in u:
+                    logged_in = True
+                    break
+                elif provider_name == "BigRock Titan Email" and "titan.email" in u and "login" not in u and not is_login_page(page, u):
+                    logged_in = True
+                    break
+                elif provider_name == "BigRock Webmail" and not is_login_page(page, u):
+                    logged_in = True
+                    break
+
             if not logged_in and not self.stop_requested:
-                raise Exception(f"Account {acc_id} login timeout: Please complete your {provider_name} sign-in in the browser window and retry.")
-            self.log(f"[Account {acc_id}] Login verified! Waiting for mailbox to load...")
+                raise Exception(f"Account {acc_id} login timeout: Please complete your {provider_name} login in the browser window and click Start Automation again.")
+
+            self.log(f"[Account {acc_id}] ✓ Login confirmed! Waiting for {provider_name} workspace to stabilize...")
             time.sleep(4)
 
+        # Zoho specific: Access email or click mail tab
         if provider_name == "Zoho Mail":
             for access_btn_sel in ["a:has-text('Access Email')", "button:has-text('Access Email')", "a:has-text('Access Mail')", "[title*='Access Email']", "a[href*='mail.zoho']"]:
                 try:
@@ -1869,6 +1928,12 @@ class ModernDarkZohoAutomationApp:
                     time.sleep(1.5)
             except Exception:
                 pass
+
+        # Wait for compose button to appear (up to 15 seconds)
+        for _ in range(15):
+            if is_mailbox_loaded(page):
+                break
+            time.sleep(1)
 
     def _run_account_dispatch(self, context, page, task_queue, params, df, acc_id: int):
         excel_path = params["excel_path"]
