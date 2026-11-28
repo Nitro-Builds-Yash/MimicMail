@@ -762,6 +762,14 @@ class ModernDarkZohoAutomationApp:
         self.seen_emails_lock = threading.Lock()
         self.seen_emails_in_session = set()
 
+        # Multi-Session Dedicated Data Registry Store
+        self.account_data = {
+            1: {"excel_path": None, "df": None, "total": 0, "sent": 0, "pending": 0, "filename": ""},
+            2: {"excel_path": None, "df": None, "total": 0, "sent": 0, "pending": 0, "filename": ""},
+            3: {"excel_path": None, "df": None, "total": 0, "sent": 0, "pending": 0, "filename": ""},
+        }
+        self.acc_file_labels = {}
+
         self._apply_dark_theme()
         self._build_ui()
         self._ensure_worker_started()
@@ -944,13 +952,13 @@ class ModernDarkZohoAutomationApp:
         left_col = ttk.Frame(main_columns, style="Root.TFrame")
         left_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
 
-        # Card 1: Webmail Session & Account Management (Supports Zoho, BigRock Titan, BigRock Webmail)
-        setup_card = ttk.LabelFrame(left_col, text="  1. Webmail Session & Account Management  ", style="DarkCard.TLabelframe", padding="12")
+        # Card 1: Multi-Session Webmail & Data Registry (Supports Zoho, BigRock Titan, BigRock Webmail)
+        setup_card = ttk.LabelFrame(left_col, text="  1. Multi-Session Webmail & Data Registry (3 Different Data per Session)  ", style="DarkCard.TLabelframe", padding="12")
         setup_card.pack(fill=tk.X, pady=(0, 10))
 
         # Row 1: Webmail Provider & Target URL
         prov_row = ttk.Frame(setup_card, style="Card.TFrame")
-        prov_row.pack(fill=tk.X, pady=(0, 5))
+        prov_row.pack(fill=tk.X, pady=(0, 8))
 
         ttk.Label(prov_row, text="Webmail Provider:", style="Dark.TLabel").pack(side=tk.LEFT)
         self.provider_combo = ttk.Combobox(
@@ -977,40 +985,41 @@ class ModernDarkZohoAutomationApp:
         self.webmail_url_entry.insert(0, WEBMAIL_PROVIDERS["Zoho Mail"]["default_url"])
         self.webmail_url_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 0), ipady=2)
 
-        # Row 2: Account Login Selector & Excel Browse
-        btn_row = ttk.Frame(setup_card, style="Card.TFrame")
-        btn_row.pack(fill=tk.X, pady=(2, 6))
-
-        ttk.Label(btn_row, text="Select Account:", style="Dark.TLabel").pack(side=tk.LEFT)
-        self.acc_select_combo = ttk.Combobox(
-            btn_row,
-            values=["Account 1", "Account 2", "Account 3"],
-            state="readonly",
-            width=11
-        )
-        self.acc_select_combo.set("Account 1")
-        self.acc_select_combo.pack(side=tk.LEFT, padx=(6, 8))
-
-        self.login_btn = ttk.Button(btn_row, text="🌐 Launch & Login Selected Account", command=self.request_open_selected_account, style="ActionBlue.TButton")
-        self.login_btn.pack(side=tk.LEFT)
-
-        self.browse_btn = ttk.Button(btn_row, text="📁 Browse Excel (.xlsx)", command=self.browse_excel, style="ActionBlue.TButton")
-        self.browse_btn.pack(side=tk.RIGHT)
-
-        # Row 3: Account Status Badges & Registry Status
-        info_row = ttk.Frame(setup_card, style="Card.TFrame")
-        info_row.pack(fill=tk.X, pady=(2, 0))
-
+        # 3 Dedicated Session Rows: each session has its own browser and its own data (.xlsx)
         self.acc_indicators = {}
+        self.acc_file_labels = {}
+        self.acc_launch_btns = {}
+        self.acc_browse_btns = {}
+
         for aid in range(1, 4):
-            lbl = tk.Label(info_row, text=f"● Acct {aid}: Ready", bg="#f3f4f6", fg=self.fg_muted, font=("Segoe UI", 8, "bold"), padx=5, pady=2, highlightbackground="#e5e7eb", highlightthickness=1)
+            session_frame = ttk.Frame(setup_card, style="Card.TFrame")
+            session_frame.pack(fill=tk.X, pady=(2, 3))
+
+            # Status Indicator
+            lbl = tk.Label(session_frame, text=f"● Session {aid}: Ready", bg="#f3f4f6", fg=self.fg_muted, font=("Segoe UI", 8, "bold"), width=16, padx=4, pady=2, highlightbackground="#e5e7eb", highlightthickness=1)
             lbl.pack(side=tk.LEFT, padx=(0, 6))
             self.acc_indicators[aid] = lbl
 
-        self.session_indicator = self.acc_indicators[1]
+            # Launch & Login Button for this session
+            l_btn = ttk.Button(session_frame, text=f"🌐 Launch Session {aid}", command=lambda a=aid: self.request_open_browser(a), style="ActionBlue.TButton")
+            l_btn.pack(side=tk.LEFT, padx=(0, 6))
+            self.acc_launch_btns[aid] = l_btn
 
-        self.file_label = ttk.Label(info_row, text="📄 No registry loaded (Required: email, author name, title)", style="DarkMuted.TLabel")
-        self.file_label.pack(side=tk.RIGHT)
+            # Browse Excel Button for this specific session
+            b_btn = ttk.Button(session_frame, text=f"📁 Load Data {aid} (.xlsx)", command=lambda a=aid: self.browse_excel(a), style="StandardDark.TButton")
+            b_btn.pack(side=tk.LEFT, padx=(0, 6))
+            self.acc_browse_btns[aid] = b_btn
+
+            # File/Status Label for this specific session
+            f_lbl = ttk.Label(session_frame, text=f"📄 Data {aid}: No file loaded", style="DarkMuted.TLabel")
+            f_lbl.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 0))
+            self.acc_file_labels[aid] = f_lbl
+
+        # Backward compatibility aliases
+        self.session_indicator = self.acc_indicators[1]
+        self.login_btn = self.acc_launch_btns[1]
+        self.browse_btn = self.acc_browse_btns[1]
+        self.file_label = self.acc_file_labels[1]
 
         # Card 2: Email Templates & Subject Line Strategy (.txt Random Selection)
         tmpl_card = ttk.LabelFrame(left_col, text="  2. Outreach Templates & Subject Strategy (.txt Random Selection)  ", style="DarkCard.TLabelframe", padding="12")
@@ -1405,9 +1414,9 @@ class ModernDarkZohoAutomationApp:
         url = self.webmail_url_entry.get().strip() if hasattr(self, "webmail_url_entry") else WEBMAIL_PROVIDERS.get(prov, {}).get("default_url", "https://mail.zoho.com/zm/")
         self.account_queues[acc_id].put(("OPEN_BROWSER", {"provider_name": prov, "url": url}))
 
-    def browse_excel(self):
+    def browse_excel(self, acc_id: int = 1):
         path = filedialog.askopenfilename(
-            title="Select Recipient Spreadsheet",
+            title=f"Select Recipient Spreadsheet for Session {acc_id}",
             filetypes=[("Excel Files", "*.xlsx *.xls")]
         )
         if not path:
@@ -1425,7 +1434,7 @@ class ModernDarkZohoAutomationApp:
                 self.log(f"⚠️ Warning: Selected file '{os.path.basename(path)}' is empty.")
                 return
 
-            # Validation 2: Check required columns (email, author name, title) with extensive fuzzy synonyms
+            # Validation 2: Check required columns
             col_map = {str(c).strip().lower(): c for c in df.columns}
             
             author_col = next((col_map[k] for k in [
@@ -1452,7 +1461,6 @@ class ModernDarkZohoAutomationApp:
             if not author_col:
                 missing.append("author name")
             if not title_col:
-                # If title is missing in the sheet, automatically default rather than blocking!
                 title_col = "__AUTO_TITLE__"
                 df["__AUTO_TITLE__"] = "Professional"
 
@@ -1473,16 +1481,6 @@ class ModernDarkZohoAutomationApp:
                 self.log(f"⚠️ Warning: '{os.path.basename(path)}' is missing required columns: {missing_str}")
                 return
 
-            # Validation 3: Check for empty essential values
-            name_col = author_col
-            empty_emails = df[email_col].isna().sum() + (df[email_col].astype(str).str.strip() == "").sum()
-            
-            if empty_emails > 0:
-                self.log(f"⚠️ Note: {empty_emails} row(s) have missing/blank email values and will be safely skipped during dispatch.")
-
-            self.excel_file_path = path
-            self.file_label.config(text=f"Loaded: {os.path.basename(path)}", foreground=self.fg_primary)
-
             status_col = next((c for c in df.columns if str(c).strip().lower() == "status"), None)
             total = len(df)
             sent = 0
@@ -1493,17 +1491,28 @@ class ModernDarkZohoAutomationApp:
                 errors = status_series.str.startswith("ERROR").sum() + (status_series == "INVALID_EMAIL").sum()
 
             pending = total - sent - errors
-            self.total_rows_count = total
-            self.sent_rows_count = sent
 
-            # Update progress bar and live status graph
-            pct = int((sent / total * 100)) if total > 0 else 0
-            self.progress_bar["value"] = pct
-            self.progress_pct_lbl.config(text=f"{pct}%")
-            self._draw_status_graph(sent=sent, pending=pending, errors=errors)
+            self.account_data[acc_id] = {
+                "excel_path": path,
+                "df": df,
+                "total": total,
+                "sent": sent,
+                "pending": pending,
+                "filename": os.path.basename(path)
+            }
 
-            self.stats_lbl.config(text=f"Total: {total} | Sent: {sent} | Pending: {pending}")
-            self.log(f"Workbook loaded successfully: {total} total rows ({sent} already SENT, {pending} pending).")
+            if acc_id == 1 or not self.excel_file_path:
+                self.excel_file_path = path
+
+            # Update session label
+            if acc_id in self.acc_file_labels:
+                self.acc_file_labels[acc_id].config(
+                    text=f"📄 Data {acc_id}: {os.path.basename(path)} ({pending} pending / {total})",
+                    foreground=self.fg_primary
+                )
+
+            self._update_overall_data_stats()
+            self.log(f"Session {acc_id} Data Loaded: '{os.path.basename(path)}' ({total} rows | {sent} sent | {pending} pending).")
 
         except Exception as e:
             messagebox.showwarning(
@@ -1512,7 +1521,19 @@ class ModernDarkZohoAutomationApp:
                 f"Error details:\n{str(e)}\n\n"
                 f"Please ensure the file is a valid .xlsx or .xls file and is not open/locked by another application."
             )
-            self.log(f"⚠️ Excel parse error on '{os.path.basename(path)}': {str(e)}")
+            self.log(f"⚠️ Excel parse error for Session {acc_id}: {str(e)}")
+
+    def _update_overall_data_stats(self):
+        tot = sum(self.account_data[a]["total"] for a in [1, 2, 3])
+        snt = sum(self.account_data[a]["sent"] for a in [1, 2, 3])
+        pnd = sum(self.account_data[a]["pending"] for a in [1, 2, 3])
+        self.total_rows_count = tot
+        self.sent_rows_count = snt
+        pct = int((snt / tot * 100)) if tot > 0 else 0
+        self.progress_bar["value"] = pct
+        self.progress_pct_lbl.config(text=f"{pct}%")
+        self._draw_status_graph(sent=snt, pending=pnd, errors=0)
+        self.stats_lbl.config(text=f"Total: {tot} | Sent: {snt} | Pending: {pnd}")
 
     def _check_cooling_period_status(self):
         lic = get_license_state()
@@ -1608,10 +1629,6 @@ class ModernDarkZohoAutomationApp:
                 self.log("⚠️ Outreach dispatch paused: Tool is in its 5-day cooling period after 30 days of active usage.")
                 return
 
-            if not self.excel_file_path or not os.path.exists(self.excel_file_path):
-                messagebox.showwarning("File Missing", "Please select an Excel workbook first using 'Browse Excel (.xlsx)'.")
-                return
-
             subj_pool = list(self.subject_lines_pool) if self.subject_lines_pool else []
             if not subj_pool:
                 messagebox.showwarning(
@@ -1624,26 +1641,11 @@ class ModernDarkZohoAutomationApp:
             active_templates = []
             for txt_widget in self.template_text_widgets:
                 content = txt_widget.get("1.0", tk.END).strip()
-                if content:
-                    active_templates.append(content)
+                active_templates.append(content)
 
-            if not active_templates:
-                messagebox.showwarning("No Templates", "Please provide at least 1 template in the 3 slots (paste HTML or load a file).")
-                return
-
-            # Read Excel to identify pending recipients
-            df = pd.read_excel(self.excel_file_path)
-            total_records = len(df)
-            has_status_col = any(c.strip().lower() == "status" for c in df.columns)
-            if has_status_col:
-                status_col_name = next(c for c in df.columns if c.strip().lower() == "status")
-                status_series = df[status_col_name].astype(str).str.strip().str.upper()
-                pending_indices = [i for i, val in enumerate(status_series) if val != "SENT"]
-            else:
-                pending_indices = list(range(total_records))
-
-            if not pending_indices:
-                messagebox.showinfo("Completed", "All recipients in this spreadsheet are already sent!")
+            non_empty_templates = [t for t in active_templates if t]
+            if not non_empty_templates:
+                messagebox.showwarning("No Templates", "Please provide at least 1 template in the slots.")
                 return
 
             # Determine concurrency mode (1, 2, or 3 accounts)
@@ -1655,6 +1657,16 @@ class ModernDarkZohoAutomationApp:
             else:
                 active_accounts = [1, 2, 3]
 
+            # Check which active accounts have data loaded
+            accounts_with_data = [a for a in active_accounts if self.account_data[a].get("excel_path") and os.path.exists(self.account_data[a]["excel_path"])]
+
+            if not accounts_with_data:
+                if self.excel_file_path and os.path.exists(self.excel_file_path):
+                    accounts_with_data = [1]
+                else:
+                    messagebox.showwarning("Data Missing", "Please load recipient data (.xlsx) using the '📁 Load Data' button for your active sessions.")
+                    return
+
             prov = self.provider_combo.get() if hasattr(self, "provider_combo") else "Zoho Mail"
             url = self.webmail_url_entry.get().strip() if hasattr(self, "webmail_url_entry") else WEBMAIL_PROVIDERS.get(prov, {}).get("default_url", "https://mail.zoho.com/zm/")
 
@@ -1664,40 +1676,111 @@ class ModernDarkZohoAutomationApp:
 
             self.seen_emails_in_session.clear()
             self.total_session_sent = 0
-            self.active_workers_count = len(active_accounts)
 
-            # Build thread-safe synchronized task queue
-            task_queue = queue.Queue()
-            for r_idx in pending_indices:
-                task_queue.put(r_idx)
+            # Build separate dispatch plans for each active session
+            total_pending_all = 0
+            dispatch_plans = {}
 
-            params = {
-                "provider_name": prov,
-                "url": url,
-                "subj_pool": subj_pool,
-                "body_tmpls": active_templates,
-                "base_mins": self.interval_var.get(),
-                "use_jitter": self.jitter_var.get(),
-                "excel_path": self.excel_file_path,
-                "include_optout": self.optout_var.get(),
-                "deduplicate_emails": self.dedup_var.get(),
-                "chunk_rest_hours": max(1.0, float(self.chunk_rest_hours_var.get())),
-                "max_session_cap": max(1, int(self.session_cap_var.get())),
-                "total_pending": len(pending_indices)
-            }
+            # Case A: Separate data files loaded for accounts
+            if len(accounts_with_data) > 1 or len(active_accounts) == 1:
+                for aid in active_accounts:
+                    data_info = self.account_data.get(aid)
+                    if not data_info or not data_info.get("excel_path") or not os.path.exists(data_info["excel_path"]):
+                        data_info = self.account_data.get(1)
+                    
+                    if not data_info or not data_info.get("excel_path"):
+                        continue
 
-            self.log(f"=== Starting Automation: {len(pending_indices)} pending emails | {len(active_accounts)} Parallel Account(s) ({prov}) ===")
-            self.ui_dispatch(lambda tp=len(pending_indices), nw=len(active_accounts): self.timer_display.config(
-                text=f"🚀 Active: {tp} Pending across {nw} Accounts", fg="#15803d"
-            ))
+                    e_path = data_info["excel_path"]
+                    df = pd.read_excel(e_path)
+                    has_status_col = any(c.strip().lower() == "status" for c in df.columns)
+                    if has_status_col:
+                        status_col_name = next(c for c in df.columns if c.strip().lower() == "status")
+                        status_series = df[status_col_name].astype(str).str.strip().str.upper()
+                        pending_indices = [i for i, val in enumerate(status_series) if val != "SENT"]
+                    else:
+                        pending_indices = list(range(len(df)))
 
-            for aid in active_accounts:
+                    if pending_indices:
+                        t_q = queue.Queue()
+                        for p_idx in pending_indices:
+                            t_q.put(p_idx)
+
+                        # Dedicated template: Session 1 -> Template 1, Session 2 -> Template 2, Session 3 -> Template 3
+                        acc_tmpl = active_templates[aid - 1] if (aid - 1 < len(active_templates) and active_templates[aid - 1]) else non_empty_templates[0]
+
+                        dispatch_plans[aid] = {
+                            "task_queue": t_q,
+                            "excel_path": e_path,
+                            "df": df,
+                            "pending_count": len(pending_indices),
+                            "body_tmpls": [acc_tmpl]
+                        }
+                        total_pending_all += len(pending_indices)
+
+            else:
+                # Case B: Single shared file distributed across active accounts
+                aid_source = accounts_with_data[0]
+                e_path = self.account_data[aid_source]["excel_path"]
+                df = pd.read_excel(e_path)
+                has_status_col = any(c.strip().lower() == "status" for c in df.columns)
+                if has_status_col:
+                    status_col_name = next(c for c in df.columns if c.strip().lower() == "status")
+                    status_series = df[status_col_name].astype(str).str.strip().str.upper()
+                    pending_indices = [i for i, val in enumerate(status_series) if val != "SENT"]
+                else:
+                    pending_indices = list(range(len(df)))
+
+                shared_q = queue.Queue()
+                for p_idx in pending_indices:
+                    shared_q.put(p_idx)
+
+                for aid in active_accounts:
+                    acc_tmpl = active_templates[aid - 1] if (aid - 1 < len(active_templates) and active_templates[aid - 1]) else non_empty_templates[0]
+                    dispatch_plans[aid] = {
+                        "task_queue": shared_q,
+                        "excel_path": e_path,
+                        "df": df,
+                        "pending_count": len(pending_indices),
+                        "body_tmpls": [acc_tmpl]
+                    }
+                total_pending_all = len(pending_indices)
+
+            if not dispatch_plans:
+                messagebox.showinfo("Completed", "All recipients in the loaded spreadsheet(s) are already marked as SENT!")
+                self.is_running = False
+                self._toggle_ui(running=False)
+                return
+
+            self.active_workers_count = len(dispatch_plans)
+            self.log(f"=== Starting Automation: {total_pending_all} total pending emails across {len(dispatch_plans)} active session(s) ({prov}) ===")
+
+            for aid, plan in dispatch_plans.items():
+                self.log(f"  • Session {aid}: Data '{os.path.basename(plan['excel_path'])}' ({plan['pending_count']} pending) using Template {aid}")
+                params = {
+                    "provider_name": prov,
+                    "url": url,
+                    "subj_pool": subj_pool,
+                    "body_tmpls": plan["body_tmpls"],
+                    "base_mins": self.interval_var.get(),
+                    "use_jitter": self.jitter_var.get(),
+                    "excel_path": plan["excel_path"],
+                    "include_optout": self.optout_var.get(),
+                    "deduplicate_emails": self.dedup_var.get(),
+                    "chunk_rest_hours": max(1.0, float(self.chunk_rest_hours_var.get())),
+                    "max_session_cap": max(1, int(self.session_cap_var.get())),
+                    "total_pending": plan["pending_count"]
+                }
                 self._ensure_worker_started(aid)
                 self.account_queues[aid].put(("START_BATCH", {
-                    "task_queue": task_queue,
+                    "task_queue": plan["task_queue"],
                     "params": params,
-                    "df": df
+                    "df": plan["df"]
                 }))
+
+            self.ui_dispatch(lambda tp=total_pending_all, nw=len(dispatch_plans): self.timer_display.config(
+                text=f"🚀 Active: {tp} Pending across {nw} Sessions", fg="#15803d"
+            ))
 
         except Exception as e:
             self.is_running = False
@@ -1715,7 +1798,11 @@ class ModernDarkZohoAutomationApp:
     def _toggle_ui(self, running: bool):
         self.start_btn.config(state=tk.DISABLED if running else tk.NORMAL)
         self.stop_btn.config(state=tk.NORMAL if running else tk.DISABLED)
-        self.browse_btn.config(state=tk.DISABLED if running else tk.NORMAL)
+        if hasattr(self, "acc_browse_btns"):
+            for btn in self.acc_browse_btns.values():
+                btn.config(state=tk.DISABLED if running else tk.NORMAL)
+        elif hasattr(self, "browse_btn"):
+            self.browse_btn.config(state=tk.DISABLED if running else tk.NORMAL)
 
     # =========================================================================
     # DEDICATED MULTI-ACCOUNT WORKER LOOPS (ONE PER ACCOUNT, ZERO GREENLET ERRORS)
