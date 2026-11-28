@@ -25,6 +25,8 @@ zoho_browser_profiles/
 *.csv
 !data/input/.gitkeep
 !data/input/recipients.example.csv
+!data/input/*.xlsx
+!data/input/*.txt
 !data/processed/.gitkeep
 
 # Operating System & IDE Specific

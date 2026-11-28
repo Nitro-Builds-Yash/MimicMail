@@ -1,0 +1,6 @@
+Invitation: Editorial Collaboration on {title}
+Scholarly Inquiry regarding your recent research on {title}
+Special Issue Contribution: {journal} | {title}
+Invitation to Submit: Forthcoming Issue of {journal}
+Research Feature & Editorial Inquiry for {name}
+Manuscript Invitation: Recent developments in {title}
